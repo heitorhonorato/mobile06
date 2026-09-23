@@ -277,11 +277,11 @@
   <section id="tab1" class="tab active">
 
     <div class="card">
-      <h2>Enviar notas fiscais (PDF)</h2>
+      <h2>Enviar notas fiscais (PDF ou HTML)</h2>
       <div class="upload-box">
-        <label class="file-btn" for="pdfInput">Selecionar PDFs</label>
-        <input type="file" id="pdfInput" multiple accept=".pdf,application/pdf" onchange="handleFiles(event)">
-        <div class="muted" style="margin-top:10px;">Pode selecionar uma ou várias notas de uma vez. Tudo é processado aqui no celular — nenhum arquivo é enviado para a internet.</div>
+        <label class="file-btn" for="pdfInput">Selecionar notas</label>
+        <input type="file" id="pdfInput" multiple accept=".pdf,application/pdf,.html,.htm,text/html" onchange="handleFiles(event)">
+        <div class="muted" style="margin-top:10px;">Pode selecionar uma ou várias notas de uma vez, em PDF ou no HTML baixado da Olist. Tudo é processado aqui no celular — nenhum arquivo é enviado para a internet.</div>
         <div id="fileList" class="file-list"></div>
         <div id="statusLine" class="status-line"></div>
         <div id="warningsBox"></div>
@@ -302,7 +302,7 @@
     </div>
 
     <div class="card" id="emptyCard1">
-      <div class="empty-state">Nenhuma nota enviada ainda. Selecione os PDFs acima para gerar a lista de separação.</div>
+      <div class="empty-state">Nenhuma nota enviada ainda. Selecione as notas acima para gerar a lista de separação.</div>
     </div>
 
   </section>
@@ -321,7 +321,7 @@
     </div>
 
     <div class="card" id="emptyCard2">
-      <div class="empty-state">Nenhuma nota carregada ainda. Envie os PDFs na aba "Lista de Separação".</div>
+      <div class="empty-state">Nenhuma nota carregada ainda. Envie as notas na aba "Lista de Separação".</div>
     </div>
   </section>
 
@@ -345,8 +345,9 @@ const PRODUCTS = [
   { id:'pretreino_frutas',   label:'Pré Treino 300g - Frutas Vermelhas',         category:'Pré-Treino',        keywords:[['pre treino'],['frutas vermelhas']], exclude:['kit'] },
   { id:'vandal_blue',        label:'Vandal King Jump 300g - Blue Razz',          category:'Pré-Treino',        keywords:[['vandal'],['blue razz']], exclude:['kit'] },
   { id:'vandal_limonade',    label:'Vandal King Jump 300g - Limonade',           category:'Pré-Treino',        keywords:[['vandal'],['limonade']], exclude:['kit'] },
-  { id:'glutamina_beta',     label:'Glutamina e Beta Alanina 300g',              category:'Outros Suplementos',keywords:[['glutamina'],['beta alanina']], exclude:['kit'] },
-  { id:'beta_alanina_1kg',   label:'Beta Alanina 1kg',                           category:'Outros Suplementos',keywords:[['beta alanina'],['1kg','1000','1 kg']], exclude:['glutamina','kit'] },
+  { id:'glutamina_300',      label:'Glutamina 300g',                             category:'Outros Suplementos',keywords:[['glutamina']], exclude:['kit'] },
+  { id:'beta_alanina_300',   label:'Beta Alanina 300g',                          category:'Outros Suplementos',keywords:[['beta alanina'],['300']], exclude:['kit'] },
+  { id:'beta_alanina_1kg',   label:'Beta Alanina 1kg',                           category:'Outros Suplementos',keywords:[['beta alanina'],['1kg','1000','1 kg']], exclude:['kit'] },
   { id:'magnesio',           label:'Magnésio 300g',                              category:'Outros Suplementos',keywords:[['magnesio']], exclude:['kit'] },
   { id:'termogenico',        label:'Termogênico 300g',                           category:'Outros Suplementos',keywords:[['termogenico']], exclude:['kit'] },
   { id:'coqueteleira',       label:'Coqueteleira 700ml',                         category:'Acessórios',        keywords:[['coqueteleira'],['700']], exclude:['kit'] },
@@ -447,6 +448,40 @@ async function extractPagesFromPdf(arrayBuffer){
     pages.push({ number: p, lines, textLength });
   }
   return pages;
+}
+
+// ---------- LEITURA DE HTML (notas baixadas do ERP da Olist) ----------
+function isHtmlFile(file){
+  return /\.html?$/i.test(file.name) || file.type === 'text/html';
+}
+
+// Transforma a página HTML em linhas de texto, no mesmo formato que sai do PDF:
+// cada parágrafo, título ou linha de tabela vira uma linha; as células da tabela ficam separadas por espaço.
+function htmlToPage(htmlText){
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  doc.querySelectorAll('script, style, img, svg').forEach(el => el.remove());
+  const BLOCK = /^(P|DIV|TR|TABLE|THEAD|TBODY|H[1-6]|LI|UL|OL|SECTION|HEADER|FOOTER)$/;
+  const lines = [];
+  let buffer = '';
+  const flush = () => {
+    const text = buffer.replace(/\s+/g,' ').trim();
+    if(text) lines.push(text);
+    buffer = '';
+  };
+  const walk = node => {
+    if(node.nodeType === Node.TEXT_NODE){ buffer += node.textContent; return; }
+    if(node.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = node.tagName;
+    if(tag === 'BR'){ flush(); return; }
+    const isBlock = BLOCK.test(tag);
+    if(isBlock) flush();
+    node.childNodes.forEach(walk);
+    if(tag === 'TD' || tag === 'TH') buffer += ' ';
+    if(isBlock) flush();
+  };
+  walk(doc.body);
+  flush();
+  return { number: null, lines, textLength: lines.join('').length };
 }
 
 // ---------- LEITURA DA TABELA DE PRODUTOS DA NOTA ----------
@@ -579,7 +614,7 @@ function splitIntoNoteBlocks(pages){
 function buildNoteFromPage(page, fileName){
   const info = extractInfo(page.lines);
   const note = {
-    id: info.orderId || info.nf || (fileName.replace(/\.pdf$/i,'') + ' (pág. ' + page.number + ')'),
+    id: info.orderId || info.nf || (fileName.replace(/\.(pdf|html?)$/i,'') + (page.number ? ' (pág. ' + page.number + ')' : '')),
     nf: info.nf,
     accessKey: info.accessKey,
     customer: info.customer,
@@ -627,15 +662,17 @@ async function handleFiles(event){
     fileListEl.appendChild(rowEl);
 
     try{
-      const buffer = await file.arrayBuffer();
-      const pages = await extractPagesFromPdf(buffer);
+      const pages = isHtmlFile(file)
+        ? [htmlToPage(await file.text())]
+        : await extractPagesFromPdf(await file.arrayBuffer());
       let notesInFile = 0;
 
       const readablePages = [];
       for(const page of pages){
         if(page.textLength < 15){
-          warnings.push('Não foi possível ler o texto da página ' + page.number + ' de "' + file.name + '" (pode ser uma nota escaneada como imagem). Confira e separe essa nota manualmente.');
-          state.notes.push({ id: file.name.replace(/\.pdf$/i,'') + ' (pág. ' + page.number + ')', fileName: file.name, page: page.number, checked:false, warning:true, lines:[] });
+          const where = page.number ? 'da página ' + page.number + ' de "' + file.name + '" (pode ser uma nota escaneada como imagem)' : 'de "' + file.name + '" (o arquivo parece vazio)';
+          warnings.push('Não foi possível ler o texto ' + where + '. Confira e separe essa nota manualmente.');
+          state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,'') + (page.number ? ' (pág. ' + page.number + ')' : ''), fileName: file.name, page: page.number, checked:false, warning:true, lines:[] });
           notesInFile++;
         } else {
           readablePages.push(page);
@@ -659,7 +696,7 @@ async function handleFiles(event){
       rowEl.textContent = '• ' + file.name + ' — ' + notesInFile + ' nota(s)';
     }catch(err){
       warnings.push('Erro ao ler "' + file.name + '": arquivo pode estar corrompido ou protegido.');
-      state.notes.push({ id: file.name.replace(/\.pdf$/i,''), fileName: file.name, checked:false, warning:true, lines:[] });
+      state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,''), fileName: file.name, checked:false, warning:true, lines:[] });
     }
   }
 

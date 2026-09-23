@@ -13,7 +13,8 @@ O site resolve dois problemas:
 - Um único arquivo `index.html`, com CSS e JavaScript embutidos (sem build,
   sem framework, sem backend).
 - PDF.js (via CDN) lê o texto dos PDFs direto no navegador — nenhum arquivo
-  sai do celular/computador do usuário.
+  sai do celular/computador do usuário. Também aceita o HTML das notas
+  baixado do ERP da Olist (lido com DOMParser, também no navegador).
 - A extração de produto/quantidade é feita por correspondência de palavras-
   chave no texto da nota (não por posição fixa na página), porque o layout
   das notas varia. Por isso os campos de quantidade na lista final são
@@ -27,7 +28,8 @@ O site resolve dois problemas:
 - Creatina 300g / 500g / 1000g
 - Pré Treino 300g — Maçã Verde / Frutas Vermelhas
 - Coqueteleira 700ml
-- Glutamina e Beta Alanina 300g
+- Glutamina 300g
+- Beta Alanina 300g
 - Beta Alanina 1kg
 - Magnésio 300g
 - Vandal King Jump 300g — Blue Razz / Limonade
