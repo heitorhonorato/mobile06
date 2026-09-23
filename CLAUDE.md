@@ -15,10 +15,11 @@ O site resolve dois problemas:
 - PDF.js (via CDN) lê o texto dos PDFs direto no navegador — nenhum arquivo
   sai do celular/computador do usuário. Também aceita o HTML das notas
   baixado do ERP da Olist (lido com DOMParser, também no navegador).
-- A extração de produto/quantidade é feita por correspondência de palavras-
-  chave no texto da nota (não por posição fixa na página), porque o layout
-  das notas varia. Por isso os campos de quantidade na lista final são
-  editáveis — é um "chute" heurístico, não uma leitura garantida.
+- As notas são separadas pelo título "DANFE" (não por página). A quantidade
+  vem da coluna QTD da tabela de produtos (CÓD. DESCRIÇÃO UN QTD ...), e o
+  produto é reconhecido por palavras-chave na descrição. Se a tabela não
+  estiver nesse formato, o site usa só as palavras-chave (quantidade 1) e
+  marca a nota para conferir. Os campos de quantidade continuam editáveis.
 - Progresso da conferência (checkboxes) é salvo em `localStorage`, para não
   perder o andamento se a página recarregar.
 - Hospedado de graça no GitHub Pages.
