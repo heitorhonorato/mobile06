@@ -332,36 +332,55 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 // ---------- CATÁLOGO DE PRODUTOS ----------
+// "exclude: ['kit']" evita que um kit (que cita whey, creatina e coqueteleira) seja contado como produto avulso.
 const PRODUCTS = [
-  { id:'whey_baunilha',      label:'Whey Baunilha 900g',                         category:'Whey',              keywords:[['whey'],['baunilha']] },
-  { id:'whey_morango',       label:'Whey Morango 900g',                          category:'Whey',              keywords:[['whey'],['morango']] },
-  { id:'whey_chocolate',     label:'Whey Chocolate 900g',                        category:'Whey',              keywords:[['whey'],['chocolate']] },
-  { id:'creatina_300',       label:'Creatina 300g',                              category:'Creatina',          keywords:[['creatina'],['300']] },
-  { id:'creatina_500',       label:'Creatina 500g',                              category:'Creatina',          keywords:[['creatina'],['500']] },
-  { id:'creatina_1000',      label:'Creatina 1000g',                             category:'Creatina',          keywords:[['creatina'],['1000','1kg','1 kg']] },
-  { id:'pretreino_maca',     label:'Pré Treino 300g - Maçã Verde',               category:'Pré-Treino',        keywords:[['pre treino'],['maca verde']] },
-  { id:'pretreino_frutas',   label:'Pré Treino 300g - Frutas Vermelhas',         category:'Pré-Treino',        keywords:[['pre treino'],['frutas vermelhas']] },
-  { id:'vandal_blue',        label:'Vandal King Jump 300g - Blue Razz',          category:'Pré-Treino',        keywords:[['vandal'],['blue razz']] },
-  { id:'vandal_limonade',    label:'Vandal King Jump 300g - Limonade',           category:'Pré-Treino',        keywords:[['vandal'],['limonade']] },
-  { id:'glutamina_beta',     label:'Glutamina e Beta Alanina 300g',              category:'Outros Suplementos',keywords:[['glutamina'],['beta alanina']] },
-  { id:'beta_alanina_1kg',   label:'Beta Alanina 1kg',                           category:'Outros Suplementos',keywords:[['beta alanina'],['1kg','1000','1 kg']], exclude:['glutamina'] },
-  { id:'magnesio',           label:'Magnésio 300g',                              category:'Outros Suplementos',keywords:[['magnesio']] },
-  { id:'termogenico',        label:'Termogênico 300g',                           category:'Outros Suplementos',keywords:[['termogenico']] },
-  { id:'coqueteleira',       label:'Coqueteleira 700ml',                         category:'Acessórios',        keywords:[['coqueteleira'],['700']] },
+  { id:'whey_baunilha',      label:'Whey Baunilha 900g',                         category:'Whey',              keywords:[['whey'],['baunilha']], exclude:['kit'] },
+  { id:'whey_morango',       label:'Whey Morango 900g',                          category:'Whey',              keywords:[['whey'],['morango']], exclude:['kit'] },
+  { id:'whey_chocolate',     label:'Whey Chocolate 900g',                        category:'Whey',              keywords:[['whey'],['chocolate']], exclude:['kit'] },
+  { id:'creatina_300',       label:'Creatina 300g',                              category:'Creatina',          keywords:[['creatina'],['300']], exclude:['kit'] },
+  { id:'creatina_500',       label:'Creatina 500g',                              category:'Creatina',          keywords:[['creatina'],['500']], exclude:['kit'] },
+  { id:'creatina_1000',      label:'Creatina 1000g',                             category:'Creatina',          keywords:[['creatina'],['1000','1kg','1 kg']], exclude:['kit'] },
+  { id:'pretreino_maca',     label:'Pré Treino 300g - Maçã Verde',               category:'Pré-Treino',        keywords:[['pre treino'],['maca verde']], exclude:['kit'] },
+  { id:'pretreino_frutas',   label:'Pré Treino 300g - Frutas Vermelhas',         category:'Pré-Treino',        keywords:[['pre treino'],['frutas vermelhas']], exclude:['kit'] },
+  { id:'vandal_blue',        label:'Vandal King Jump 300g - Blue Razz',          category:'Pré-Treino',        keywords:[['vandal'],['blue razz']], exclude:['kit'] },
+  { id:'vandal_limonade',    label:'Vandal King Jump 300g - Limonade',           category:'Pré-Treino',        keywords:[['vandal'],['limonade']], exclude:['kit'] },
+  { id:'glutamina_beta',     label:'Glutamina e Beta Alanina 300g',              category:'Outros Suplementos',keywords:[['glutamina'],['beta alanina']], exclude:['kit'] },
+  { id:'beta_alanina_1kg',   label:'Beta Alanina 1kg',                           category:'Outros Suplementos',keywords:[['beta alanina'],['1kg','1000','1 kg']], exclude:['glutamina','kit'] },
+  { id:'magnesio',           label:'Magnésio 300g',                              category:'Outros Suplementos',keywords:[['magnesio']], exclude:['kit'] },
+  { id:'termogenico',        label:'Termogênico 300g',                           category:'Outros Suplementos',keywords:[['termogenico']], exclude:['kit'] },
+  { id:'coqueteleira',       label:'Coqueteleira 700ml',                         category:'Acessórios',        keywords:[['coqueteleira'],['700']], exclude:['kit'] },
   { id:'kit_especial',       label:'Kit Especial',                               category:'Kits',              keywords:[['kit especial']] },
 ];
 const CATEGORY_ORDER = ['Whey','Creatina','Pré-Treino','Outros Suplementos','Acessórios','Kits'];
+const UNKNOWN_CATEGORY = 'Fora do catálogo (conferir o nome)';
 
 // ---------- ESTADO ----------
-let state = { items: {}, notes: [] }; // items: {productId: qty}, notes: [{id, fileName, checked, warning, matches:[label]}]
+// items: {chave: quantidade}. A chave é o id do catálogo, ou "nf:<código>" para produto fora do catálogo.
+// labels: {chave: nome} só para os produtos fora do catálogo (nome copiado da nota).
+// notes: [{id, nf, customer, fileName, page, checked, warning, approx, lines:[{label, qty}]}]
+let state = { items: {}, labels: {}, notes: [] };
 
 function normalize(str){
   return (str||'')
     .toString()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // remove acentos
+    .normalize('NFD').replace(/[̀-ͯ]/g,'') // remove acentos
     .toLowerCase()
+    .replace(/[-_]/g,' ')                            // "pré-treino" vira "pre treino"
     .replace(/\s+/g,' ')
     .trim();
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// "2,000" -> 2 ; "1.000,000" -> 1000
+function parseBrNumber(str){
+  return parseFloat(String(str).replace(/\./g,'').replace(',','.'));
+}
+
+function formatQty(n){
+  return Number.isInteger(n) ? String(n) : String(Math.round(n*1000)/1000).replace('.',',');
 }
 
 // ---------- PERSISTÊNCIA ----------
@@ -373,6 +392,9 @@ function loadState(){
     const raw = localStorage.getItem('separacaoPedidosState');
     if(raw){ state = JSON.parse(raw); }
   }catch(e){}
+  state.items = state.items || {};
+  state.labels = state.labels || {};
+  state.notes = state.notes || [];
 }
 
 // ---------- ABAS ----------
@@ -384,28 +406,60 @@ function showTab(n){
 }
 
 // ---------- LEITURA DE PDF ----------
-async function extractLinesFromPdf(arrayBuffer){
+// Devolve as linhas de texto de cada página separadamente (cada página costuma ser uma nota).
+async function extractPagesFromPdf(arrayBuffer){
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const lines = [];
-  let fullTextLength = 0;
+  const pages = [];
   for(let p=1; p<=pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    fullTextLength += content.items.reduce((acc,i)=>acc+(i.str||'').length,0);
+    const textLength = content.items.reduce((acc,i)=>acc+(i.str||'').length,0);
     const rows = new Map();
     content.items.forEach(item=>{
       const y = Math.round(item.transform[5]);
       if(!rows.has(y)) rows.set(y, []);
       rows.get(y).push(item);
     });
-    const sortedRows = Array.from(rows.entries()).sort((a,b)=>b[0]-a[0]);
-    sortedRows.forEach(([y, items])=>{
+    const lines = [];
+    Array.from(rows.entries()).sort((a,b)=>b[0]-a[0]).forEach(([y, items])=>{
       items.sort((a,b)=>a.transform[4]-b.transform[4]);
       const text = items.map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
       if(text) lines.push(text);
     });
+    pages.push({ number: p, lines, textLength });
   }
-  return { lines, fullTextLength };
+  return pages;
+}
+
+// ---------- LEITURA DA TABELA DE PRODUTOS DA NOTA ----------
+// Linha de item da DANFE: "CÓD DESCRIÇÃO UN QTD V.UNIT V.TOTAL"
+// ex: "55 Creatina Monohidratada 100% Pura 500g - UN 2,000 32,450 64,90"
+const ITEM_RE = /^(\d+)\s+(.+?)\s+([A-Z]{1,4})\s+(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s+(\d[\d.]*,\d+)\s+(\d[\d.]*,\d+)$/;
+
+// Lê os itens da tabela. Devolve null se a página não tiver a tabela no formato esperado.
+function parseItemTable(lines){
+  const headerIdx = lines.findIndex(l => /C[OÓ]D\.?\s+DESCRI/i.test(l) && /\bQTD\b/i.test(l));
+  if(headerIdx < 0) return null;
+  const items = [];
+  let current = null;
+  for(let i=headerIdx+1; i<lines.length; i++){
+    const line = lines[i];
+    if(/TOTAL DA N|DADOS ADICIONAIS|C[AÁ]LCULO DO IMPOSTO|TRANSPORTADOR/i.test(line)) break;
+    const m = line.match(ITEM_RE);
+    if(m){
+      current = { code: m[1], desc: m[2], qty: parseBrNumber(m[4]) };
+      items.push(current);
+    } else if(current){
+      // a descrição do produto continua na linha de baixo (ex: o sabor)
+      current.desc += ' ' + line;
+    }
+  }
+  return items;
+}
+
+function findProduct(text){
+  const norm = normalize(text);
+  return PRODUCTS.find(product => lineMatchesProduct(norm, product)) || null;
 }
 
 function lineMatchesProduct(lineNorm, product){
@@ -421,35 +475,66 @@ function lineMatchesProduct(lineNorm, product){
   return true;
 }
 
-function guessQuantity(line, product){
-  const lineNorm = normalize(line);
-  // posição aproximada após a última palavra-chave encontrada
-  let lastIdx = 0;
-  product.keywords.forEach(group=>{
-    group.forEach(kw=>{
-      const idx = lineNorm.indexOf(normalize(kw));
-      if(idx >= 0){
-        const end = idx + normalize(kw).length;
-        if(end > lastIdx) lastIdx = end;
-      }
-    });
+// Plano B, para notas sem a tabela no formato esperado: procura palavras-chave linha por linha.
+// A quantidade aqui é só um palpite, por isso a nota fica marcada para conferência manual.
+function guessItemsByKeywords(lines){
+  const found = [];
+  lines.forEach(line=>{
+    const product = findProduct(line);
+    if(product) found.push({ product, qty: 1 });
   });
-  const after = line.slice(lastIdx);
-  const tokens = after.match(/\d+(?:[.,]\d+)?/g) || [];
-  for(const t of tokens){
-    if(/^\d+$/.test(t)) return parseFloat(t);
-    if(/,\d{3,4}$/.test(t)) return parseFloat(t.replace(',','.'));
-  }
-  if(tokens.length) return parseFloat(tokens[0].replace(',','.')) || 1;
-  return 1;
+  return found;
 }
 
-function extractOrderId(fullText, fileName){
-  let m = fullText.match(/pedido[:\s\-]{0,5}([0-9]{8,})/i);
-  if(m) return m[1];
-  m = fullText.match(/n[ºo°]\.?\s*[:\-]?\s*(\d{1,3}(?:[.\s]?\d{3}){0,3})/i);
-  if(m) return m[1].replace(/[.\s]/g,'');
-  return fileName.replace(/\.pdf$/i,'');
+function extractInfo(lines){
+  const text = lines.join('\n');
+  let m = text.match(/N[ºo°]\.?\s*Pedido\s*:?\s*([A-Za-z0-9\-]+)/i) || text.match(/pedido[:\s\-]{0,5}([0-9]{5,})/i);
+  const orderId = m ? m[1] : '';
+  m = text.match(/N[ÚU]MERO\s*:?\s*([\d.]+)/i);
+  const nf = m ? m[1] : '';
+  m = text.match(/\b(\d{44})\b/);
+  const accessKey = m ? m[1] : '';
+  let customer = '';
+  const destIdx = lines.findIndex(l => /^DESTINAT[AÁ]RIO/i.test(l));
+  if(destIdx >= 0 && lines[destIdx+1]) customer = lines[destIdx+1];
+  return { orderId, nf, accessKey, customer };
+}
+
+// Transforma o texto de uma página em uma nota com a lista de produtos.
+function buildNoteFromPage(page, fileName){
+  const info = extractInfo(page.lines);
+  const note = {
+    id: info.orderId || info.nf || (fileName.replace(/\.pdf$/i,'') + ' (pág. ' + page.number + ')'),
+    nf: info.nf,
+    accessKey: info.accessKey,
+    customer: info.customer,
+    fileName,
+    page: page.number,
+    checked: false,
+    warning: false,
+    approx: false,
+    lines: []   // [{key, label, qty}]
+  };
+
+  const tableItems = parseItemTable(page.lines);
+  if(tableItems && tableItems.length){
+    tableItems.forEach(item=>{
+      const product = findProduct(item.desc);
+      if(product){
+        note.lines.push({ key: product.id, label: product.label, qty: item.qty });
+      } else {
+        const label = item.desc.replace(/\s+/g,' ').trim();
+        note.lines.push({ key: 'nf:' + item.code, label, qty: item.qty, unknown: true });
+      }
+    });
+  } else {
+    note.approx = true;
+    note.warning = true;
+    guessItemsByKeywords(page.lines).forEach(({product, qty})=>{
+      note.lines.push({ key: product.id, label: product.label, qty });
+    });
+  }
+  return note;
 }
 
 // ---------- PROCESSAMENTO DOS ARQUIVOS ----------
@@ -465,7 +550,7 @@ async function handleFiles(event){
   statusLine.textContent = 'Processando ' + files.length + ' arquivo(s)...';
 
   // nova leva: reinicia estado
-  state = { items: {}, notes: [] };
+  state = { items: {}, labels: {}, notes: [] };
 
   const warnings = [];
 
@@ -476,53 +561,64 @@ async function handleFiles(event){
 
     try{
       const buffer = await file.arrayBuffer();
-      const { lines, fullTextLength } = await extractLinesFromPdf(buffer);
-      const fullText = lines.join('\n');
+      const pages = await extractPagesFromPdf(buffer);
+      let notesInFile = 0;
 
-      const note = {
-        id: extractOrderId(fullText, file.name),
-        fileName: file.name,
-        checked: false,
-        warning: false,
-        matches: []
-      };
-
-      if(fullTextLength < 15){
-        note.warning = true;
-        warnings.push('Não foi possível extrair texto de "' + file.name + '" (pode ser uma nota escaneada como imagem). Confira e separe manualmente.');
-      } else {
-        const foundInThisFile = {};
-        lines.forEach(line=>{
-          const lineNorm = normalize(line);
-          PRODUCTS.forEach(product=>{
-            if(lineMatchesProduct(lineNorm, product)){
-              const qty = guessQuantity(line, product);
-              foundInThisFile[product.id] = (foundInThisFile[product.id] || 0) + (qty || 1);
-            }
-          });
-        });
-        Object.keys(foundInThisFile).forEach(pid=>{
-          state.items[pid] = (state.items[pid] || 0) + foundInThisFile[pid];
-          const prod = PRODUCTS.find(p=>p.id===pid);
-          note.matches.push(prod.label + ' (' + foundInThisFile[pid] + ')');
-        });
-        if(note.matches.length === 0){
-          note.warning = true;
-          warnings.push('Nenhum produto do catálogo foi reconhecido em "' + file.name + '". Confira manualmente.');
+      for(const page of pages){
+        if(page.textLength < 15){
+          warnings.push('Não foi possível ler o texto da página ' + page.number + ' de "' + file.name + '" (pode ser uma nota escaneada como imagem). Confira e separe essa nota manualmente.');
+          state.notes.push({ id: file.name.replace(/\.pdf$/i,'') + ' (pág. ' + page.number + ')', fileName: file.name, page: page.number, checked:false, warning:true, lines:[] });
+          notesInFile++;
+          continue;
         }
+
+        const note = buildNoteFromPage(page, file.name);
+
+        // Nota com muitos produtos pode ocupar 2 páginas: mesma chave de acesso = mesma nota.
+        const prev = state.notes[state.notes.length-1];
+        if(note.accessKey && prev && prev.accessKey === note.accessKey){
+          prev.lines.push(...note.lines);
+          prev.approx = prev.approx && note.approx;
+          continue;
+        }
+        state.notes.push(note);
+        notesInFile++;
       }
 
-      state.notes.push(note);
+      rowEl.textContent = '• ' + file.name + ' — ' + notesInFile + ' nota(s)';
     }catch(err){
       warnings.push('Erro ao ler "' + file.name + '": arquivo pode estar corrompido ou protegido.');
-      state.notes.push({ id: file.name.replace(/\.pdf$/i,''), fileName: file.name, checked:false, warning:true, matches:[] });
+      state.notes.push({ id: file.name.replace(/\.pdf$/i,''), fileName: file.name, checked:false, warning:true, lines:[] });
     }
   }
 
-  statusLine.textContent = 'Processamento concluído.';
-  if(warnings.length){
-    warningsBox.innerHTML = warnings.map(w=>'<div class="warning">⚠ ' + w + '</div>').join('');
+  // Soma tudo na lista de separação e gera os avisos de cada nota
+  state.notes.forEach(note=>{
+    (note.lines || []).forEach(line=>{
+      state.items[line.key] = (state.items[line.key] || 0) + line.qty;
+      if(line.unknown) state.labels[line.key] = line.label;
+    });
+    if(note.approx){
+      warnings.push('Pedido ' + note.id + ': a tabela de produtos não estava no formato esperado. Os produtos foram achados por palavra-chave e a quantidade foi considerada 1. Confira essa nota.');
+    }
+    if(note.lines && note.lines.length === 0 && note.warning === false){
+      note.warning = true;
+      warnings.push('Pedido ' + note.id + ': nenhum produto foi encontrado na nota. Confira manualmente.');
+    }
+  });
+
+  const unknownCount = Object.keys(state.labels).length;
+  if(unknownCount){
+    warnings.push(unknownCount + ' produto(s) da nota não estão no catálogo. Eles aparecem no fim da lista com o nome que está na nota.');
   }
+
+  statusLine.textContent = 'Processamento concluído: ' + state.notes.length + ' nota(s) encontrada(s).';
+  if(warnings.length){
+    warningsBox.innerHTML = warnings.map(w=>'<div class="warning">⚠ ' + escapeHtml(w) + '</div>').join('');
+  }
+
+  // permite escolher o mesmo arquivo de novo depois
+  event.target.value = '';
 
   saveState();
   renderResults();
@@ -536,17 +632,17 @@ function populateManualSelect(){
   sel.innerHTML = PRODUCTS.map(p=>'<option value="'+p.id+'">'+p.label+'</option>').join('');
 }
 
-function changeQty(productId, delta){
-  const current = state.items[productId] || 0;
+function changeQty(key, delta){
+  const current = state.items[key] || 0;
   const next = Math.max(0, current + delta);
-  if(next === 0){ delete state.items[productId]; } else { state.items[productId] = next; }
+  if(next === 0){ delete state.items[key]; } else { state.items[key] = next; }
   saveState();
   renderResults();
 }
 
-function setQtyDirect(productId, value){
+function setQtyDirect(key, value){
   const n = parseInt(value, 10);
-  if(isNaN(n) || n <= 0){ delete state.items[productId]; } else { state.items[productId] = n; }
+  if(isNaN(n) || n <= 0){ delete state.items[key]; } else { state.items[key] = n; }
   saveState();
 }
 
@@ -560,6 +656,15 @@ function addManualItem(){
   renderResults();
 }
 
+function productRowHtml(key, label){
+  return '<div class="product-name">'+escapeHtml(label)+'</div>'+
+    '<div class="product-qty">'+
+      '<button class="qty-step" onclick="changeQty(\''+key+'\', -1)">−</button>'+
+      '<input type="number" min="0" value="'+state.items[key]+'" onchange="setQtyDirect(\''+key+'\', this.value); renderResults();">'+
+      '<button class="qty-step" onclick="changeQty(\''+key+'\', 1)">+</button>'+
+    '</div>';
+}
+
 function renderResults(){
   const hasItems = Object.keys(state.items).length > 0;
   document.getElementById('resultCard').style.display = hasItems ? 'block' : 'none';
@@ -569,25 +674,27 @@ function renderResults(){
   const container = document.getElementById('resultsContainer');
   container.innerHTML = '';
 
-  CATEGORY_ORDER.forEach(cat=>{
-    const catProducts = PRODUCTS.filter(p=>p.category===cat && state.items[p.id]);
-    if(catProducts.length === 0) return;
+  const groups = CATEGORY_ORDER.map(cat=>({
+    title: cat,
+    rows: PRODUCTS.filter(p=>p.category===cat && state.items[p.id]).map(p=>({ key:p.id, label:p.label }))
+  }));
+  groups.push({
+    title: UNKNOWN_CATEGORY,
+    rows: Object.keys(state.items).filter(k=>k.startsWith('nf:')).map(k=>({ key:k, label: state.labels[k] || ('Código ' + k.slice(3)) }))
+  });
+
+  groups.forEach(group=>{
+    if(group.rows.length === 0) return;
     const block = document.createElement('div');
     block.className = 'category-block';
     const title = document.createElement('div');
     title.className = 'category-title';
-    title.textContent = cat;
+    title.textContent = group.title;
     block.appendChild(title);
-    catProducts.forEach(p=>{
+    group.rows.forEach(r=>{
       const row = document.createElement('div');
       row.className = 'product-row';
-      row.innerHTML =
-        '<div class="product-name">'+p.label+'</div>'+
-        '<div class="product-qty">'+
-          '<button class="qty-step" onclick="changeQty(\''+p.id+'\', -1)">−</button>'+
-          '<input type="number" min="0" value="'+state.items[p.id]+'" onchange="setQtyDirect(\''+p.id+'\', this.value); renderResults();">'+
-          '<button class="qty-step" onclick="changeQty(\''+p.id+'\', 1)">+</button>'+
-        '</div>';
+      row.innerHTML = productRowHtml(r.key, r.label);
       block.appendChild(row);
     });
     container.appendChild(block);
@@ -618,18 +725,22 @@ function renderNotes(){
   state.notes.forEach((note, idx)=>{
     const row = document.createElement('div');
     row.className = 'note-row';
-    const tagsHtml = note.matches.length
-      ? '<div class="note-tags">'+note.matches.join(', ')+'</div>'
-      : '';
+    const lines = note.lines || [];
+    const itemsHtml = lines.length
+      ? '<div class="note-tags">'+lines.map(l=>'<div>'+formatQty(l.qty)+'× '+escapeHtml(l.label)+'</div>').join('')+'</div>'
+      : (note.matches && note.matches.length ? '<div class="note-tags">'+escapeHtml(note.matches.join(', '))+'</div>' : '');
     const warnHtml = note.warning
       ? '<div class="tag-warn">Verificar manualmente</div>'
       : '';
+    const title = 'Pedido ' + note.id + (note.nf ? ' · NF ' + note.nf : '');
+    const fileInfo = note.fileName + (note.page ? ' · pág. ' + note.page : '');
     row.innerHTML =
       '<input type="checkbox" '+(note.checked ? 'checked' : '')+' onchange="toggleNoteChecked('+idx+')">'+
       '<div class="note-info">'+
-        '<div class="note-id '+(note.checked?'checked':'')+'">Pedido/Nota: '+note.id+'</div>'+
-        '<div class="note-file">'+note.fileName+'</div>'+
-        tagsHtml + warnHtml +
+        '<div class="note-id '+(note.checked?'checked':'')+'">'+escapeHtml(title)+'</div>'+
+        (note.customer ? '<div class="note-file">'+escapeHtml(note.customer)+'</div>' : '')+
+        itemsHtml + warnHtml +
+        '<div class="note-file">'+escapeHtml(fileInfo)+'</div>'+
       '</div>';
     container.appendChild(row);
   });
@@ -638,7 +749,7 @@ function renderNotes(){
 // ---------- RESET ----------
 function resetSession(){
   if(!confirm('Isso vai apagar a lista e a conferência atuais. Continuar?')) return;
-  state = { items:{}, notes:[] };
+  state = { items:{}, labels:{}, notes:[] };
   saveState();
   document.getElementById('fileList').innerHTML = '';
   document.getElementById('statusLine').textContent = '';
