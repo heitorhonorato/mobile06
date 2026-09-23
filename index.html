@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Separação de Pedidos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg: #F4F5F2;
+    --panel: #FFFFFF;
+    --ink: #16232B;
+    --ink-soft: #4C5A61;
+    --line: #DCE0DC;
+    --accent: #E08A2B;
+    --accent-dark: #B96C1B;
+    --good: #2F8F4E;
+    --good-bg: #E7F4EA;
+    --warn: #B23B3B;
+    --warn-bg: #FBEAEA;
+    --radius: 10px;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: 48px;
+  }
+  header{
+    background: var(--ink);
+    color: #fff;
+    padding: 18px 16px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  header h1{
+    margin: 0 0 2px;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  header p{
+    margin: 0;
+    font-size: 13px;
+    color: #B9C2C6;
+  }
+  nav.tabs{
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--ink);
+    position: sticky;
+    top: 62px;
+    z-index: 20;
+    border-bottom: 1px solid #2A3A43;
+  }
+  nav.tabs button{
+    flex: 1;
+    padding: 13px 8px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: var(--radius);
+    border: none;
+    background: #223038;
+    color: #C6CDD0;
+    cursor: pointer;
+  }
+  nav.tabs button.active{
+    background: var(--accent);
+    color: #1A1200;
+  }
+  main{
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  section.tab{ display: none; }
+  section.tab.active{ display: block; }
+
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2{
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .muted{ color: var(--ink-soft); font-size: 13.5px; line-height: 1.45; }
+
+  .upload-box{
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 22px 14px;
+    text-align: center;
+  }
+  input[type="file"]{ display: none; }
+  label.file-btn, button.btn{
+    display: inline-block;
+    background: var(--accent);
+    color: #1A1200;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px 22px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    text-align: center;
+  }
+  label.file-btn:active, button.btn:active{ background: var(--accent-dark); }
+  button.btn.secondary{
+    background: #EDEFEA;
+    color: var(--ink);
+  }
+  button.btn.block{ display: block; width: 100%; margin-top: 10px; }
+  button.btn.small{ font-size: 13px; padding: 9px 14px; }
+  button.btn:disabled{ opacity: 0.5; }
+
+  .file-list{ margin-top: 12px; text-align: left; font-size: 14px; color: var(--ink-soft); }
+  .file-list div{ padding: 3px 0; }
+
+  .status-line{ font-size: 14px; margin-top: 10px; color: var(--ink-soft); }
+
+  .warning{
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13.5px;
+    margin-top: 10px;
+    line-height: 1.4;
+  }
+
+  .category-block{ margin-bottom: 18px; }
+  .category-title{
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    margin: 0 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .product-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 4px;
+    border-bottom: 1px solid #EEEFEA;
+  }
+  .product-row:last-child{ border-bottom: none; }
+  .product-name{ font-size: 17px; font-weight: 600; }
+  .product-qty{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .product-qty input{
+    width: 62px;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    padding: 9px 4px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    color: var(--accent-dark);
+  }
+  .qty-step{
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #F5F6F4;
+    color: var(--ink);
+  }
+
+  .add-manual{
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .add-manual select, .add-manual input[type="number"]{
+    font-size: 15px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .add-manual select{ flex: 1; min-width: 160px; }
+  .add-manual input[type="number"]{ width: 70px; }
+
+  .progress-wrap{
+    background: #EDEFEA;
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+  .progress-bar{
+    height: 100%;
+    background: var(--good);
+    width: 0%;
+  }
+  .progress-label{ font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+
+  .note-row{
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 4px;
+    border-bottom: 1px solid #EEEFEA;
+  }
+  .note-row:last-child{ border-bottom: none; }
+  .note-row input[type="checkbox"]{
+    width: 26px;
+    height: 26px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+  .note-info{ flex: 1; }
+  .note-id{ font-size: 16px; font-weight: 700; }
+  .note-id.checked{ color: var(--good); text-decoration: line-through; opacity: 0.75; }
+  .note-file{ font-size: 12.5px; color: var(--ink-soft); margin-top: 1px; }
+  .note-tags{ margin-top: 4px; font-size: 12px; color: var(--ink-soft); }
+  .tag-warn{
+    display: inline-block;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-size: 11.5px;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .empty-state{
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    padding: 20px 10px;
+  }
+
+  footer{
+    text-align: center;
+    font-size: 12px;
+    color: var(--ink-soft);
+    padding: 20px 16px 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Separação de Pedidos</h1>
+  <p>Notas fiscais → lista de separação e conferência</p>
+</header>
+
+<nav class="tabs">
+  <button id="tabBtn1" class="active" onclick="showTab(1)">Lista de Separação</button>
+  <button id="tabBtn2" onclick="showTab(2)">Conferência de Pedidos</button>
+</nav>
+
+<main>
+
+  <!-- ABA 1 -->
+  <section id="tab1" class="tab active">
+
+    <div class="card">
+      <h2>Enviar notas fiscais (PDF)</h2>
+      <div class="upload-box">
+        <label class="file-btn" for="pdfInput">Selecionar PDFs</label>
+        <input type="file" id="pdfInput" multiple accept=".pdf,application/pdf" onchange="handleFiles(event)">
+        <div class="muted" style="margin-top:10px;">Pode selecionar uma ou várias notas de uma vez. Tudo é processado aqui no celular — nenhum arquivo é enviado para a internet.</div>
+        <div id="fileList" class="file-list"></div>
+        <div id="statusLine" class="status-line"></div>
+        <div id="warningsBox"></div>
+      </div>
+      <button class="btn secondary block" id="resetBtn" onclick="resetSession()" style="display:none;">Começar nova leva (limpar tudo)</button>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <h2>Lista consolidada para separar</h2>
+      <div id="resultsContainer"></div>
+
+      <div class="category-title" style="margin-top:14px;">Adicionar item manualmente</div>
+      <div class="add-manual">
+        <select id="manualProductSelect"></select>
+        <input type="number" id="manualQtyInput" min="1" value="1">
+        <button class="btn small" onclick="addManualItem()">Adicionar</button>
+      </div>
+    </div>
+
+    <div class="card" id="emptyCard1">
+      <div class="empty-state">Nenhuma nota enviada ainda. Selecione os PDFs acima para gerar a lista de separação.</div>
+    </div>
+
+  </section>
+
+  <!-- ABA 2 -->
+  <section id="tab2" class="tab">
+    <div class="card">
+      <h2>Progresso da conferência</h2>
+      <div class="progress-label" id="progressLabel">0 de 0 conferidas</div>
+      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    </div>
+
+    <div class="card" id="notesCard" style="display:none;">
+      <h2>Notas desta leva</h2>
+      <div id="notesContainer"></div>
+    </div>
+
+    <div class="card" id="emptyCard2">
+      <div class="empty-state">Nenhuma nota carregada ainda. Envie os PDFs na aba "Lista de Separação".</div>
+    </div>
+  </section>
+
+</main>
+
+<footer>Processamento 100% local no navegador — nada é enviado para servidores.</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------- CATÁLOGO DE PRODUTOS ----------
+const PRODUCTS = [
+  { id:'whey_baunilha',      label:'Whey Baunilha 900g',                         category:'Whey',              keywords:[['whey'],['baunilha']] },
+  { id:'whey_morango',       label:'Whey Morango 900g',                          category:'Whey',              keywords:[['whey'],['morango']] },
+  { id:'whey_chocolate',     label:'Whey Chocolate 900g',                        category:'Whey',              keywords:[['whey'],['chocolate']] },
+  { id:'creatina_300',       label:'Creatina 300g',                              category:'Creatina',          keywords:[['creatina'],['300']] },
+  { id:'creatina_500',       label:'Creatina 500g',                              category:'Creatina',          keywords:[['creatina'],['500']] },
+  { id:'creatina_1000',      label:'Creatina 1000g',                             category:'Creatina',          keywords:[['creatina'],['1000','1kg','1 kg']] },
+  { id:'pretreino_maca',     label:'Pré Treino 300g - Maçã Verde',               category:'Pré-Treino',        keywords:[['pre treino'],['maca verde']] },
+  { id:'pretreino_frutas',   label:'Pré Treino 300g - Frutas Vermelhas',         category:'Pré-Treino',        keywords:[['pre treino'],['frutas vermelhas']] },
+  { id:'vandal_blue',        label:'Vandal King Jump 300g - Blue Razz',          category:'Pré-Treino',        keywords:[['vandal'],['blue razz']] },
+  { id:'vandal_limonade',    label:'Vandal King Jump 300g - Limonade',           category:'Pré-Treino',        keywords:[['vandal'],['limonade']] },
+  { id:'glutamina_beta',     label:'Glutamina e Beta Alanina 300g',              category:'Outros Suplementos',keywords:[['glutamina'],['beta alanina']] },
+  { id:'beta_alanina_1kg',   label:'Beta Alanina 1kg',                           category:'Outros Suplementos',keywords:[['beta alanina'],['1kg','1000','1 kg']], exclude:['glutamina'] },
+  { id:'magnesio',           label:'Magnésio 300g',                              category:'Outros Suplementos',keywords:[['magnesio']] },
+  { id:'termogenico',        label:'Termogênico 300g',                           category:'Outros Suplementos',keywords:[['termogenico']] },
+  { id:'coqueteleira',       label:'Coqueteleira 700ml',                         category:'Acessórios',        keywords:[['coqueteleira'],['700']] },
+  { id:'kit_especial',       label:'Kit Especial',                               category:'Kits',              keywords:[['kit especial']] },
+];
+const CATEGORY_ORDER = ['Whey','Creatina','Pré-Treino','Outros Suplementos','Acessórios','Kits'];
+
+// ---------- ESTADO ----------
+let state = { items: {}, notes: [] }; // items: {productId: qty}, notes: [{id, fileName, checked, warning, matches:[label]}]
+
+function normalize(str){
+  return (str||'')
+    .toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // remove acentos
+    .toLowerCase()
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+// ---------- PERSISTÊNCIA ----------
+function saveState(){
+  try{ localStorage.setItem('separacaoPedidosState', JSON.stringify(state)); }catch(e){}
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem('separacaoPedidosState');
+    if(raw){ state = JSON.parse(raw); }
+  }catch(e){}
+}
+
+// ---------- ABAS ----------
+function showTab(n){
+  document.getElementById('tab1').classList.toggle('active', n===1);
+  document.getElementById('tab2').classList.toggle('active', n===2);
+  document.getElementById('tabBtn1').classList.toggle('active', n===1);
+  document.getElementById('tabBtn2').classList.toggle('active', n===2);
+}
+
+// ---------- LEITURA DE PDF ----------
+async function extractLinesFromPdf(arrayBuffer){
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const lines = [];
+  let fullTextLength = 0;
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    fullTextLength += content.items.reduce((acc,i)=>acc+(i.str||'').length,0);
+    const rows = new Map();
+    content.items.forEach(item=>{
+      const y = Math.round(item.transform[5]);
+      if(!rows.has(y)) rows.set(y, []);
+      rows.get(y).push(item);
+    });
+    const sortedRows = Array.from(rows.entries()).sort((a,b)=>b[0]-a[0]);
+    sortedRows.forEach(([y, items])=>{
+      items.sort((a,b)=>a.transform[4]-b.transform[4]);
+      const text = items.map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
+      if(text) lines.push(text);
+    });
+  }
+  return { lines, fullTextLength };
+}
+
+function lineMatchesProduct(lineNorm, product){
+  for(const group of product.keywords){
+    const found = group.some(kw => lineNorm.includes(normalize(kw)));
+    if(!found) return false;
+  }
+  if(product.exclude){
+    for(const ex of product.exclude){
+      if(lineNorm.includes(normalize(ex))) return false;
+    }
+  }
+  return true;
+}
+
+function guessQuantity(line, product){
+  const lineNorm = normalize(line);
+  // posição aproximada após a última palavra-chave encontrada
+  let lastIdx = 0;
+  product.keywords.forEach(group=>{
+    group.forEach(kw=>{
+      const idx = lineNorm.indexOf(normalize(kw));
+      if(idx >= 0){
+        const end = idx + normalize(kw).length;
+        if(end > lastIdx) lastIdx = end;
+      }
+    });
+  });
+  const after = line.slice(lastIdx);
+  const tokens = after.match(/\d+(?:[.,]\d+)?/g) || [];
+  for(const t of tokens){
+    if(/^\d+$/.test(t)) return parseFloat(t);
+    if(/,\d{3,4}$/.test(t)) return parseFloat(t.replace(',','.'));
+  }
+  if(tokens.length) return parseFloat(tokens[0].replace(',','.')) || 1;
+  return 1;
+}
+
+function extractOrderId(fullText, fileName){
+  let m = fullText.match(/pedido[:\s\-]{0,5}([0-9]{8,})/i);
+  if(m) return m[1];
+  m = fullText.match(/n[ºo°]\.?\s*[:\-]?\s*(\d{1,3}(?:[.\s]?\d{3}){0,3})/i);
+  if(m) return m[1].replace(/[.\s]/g,'');
+  return fileName.replace(/\.pdf$/i,'');
+}
+
+// ---------- PROCESSAMENTO DOS ARQUIVOS ----------
+async function handleFiles(event){
+  const files = Array.from(event.target.files || []);
+  if(files.length === 0) return;
+
+  const fileListEl = document.getElementById('fileList');
+  const statusLine = document.getElementById('statusLine');
+  const warningsBox = document.getElementById('warningsBox');
+  fileListEl.innerHTML = '';
+  warningsBox.innerHTML = '';
+  statusLine.textContent = 'Processando ' + files.length + ' arquivo(s)...';
+
+  // nova leva: reinicia estado
+  state = { items: {}, notes: [] };
+
+  const warnings = [];
+
+  for(const file of files){
+    const rowEl = document.createElement('div');
+    rowEl.textContent = '• ' + file.name;
+    fileListEl.appendChild(rowEl);
+
+    try{
+      const buffer = await file.arrayBuffer();
+      const { lines, fullTextLength } = await extractLinesFromPdf(buffer);
+      const fullText = lines.join('\n');
+
+      const note = {
+        id: extractOrderId(fullText, file.name),
+        fileName: file.name,
+        checked: false,
+        warning: false,
+        matches: []
+      };
+
+      if(fullTextLength < 15){
+        note.warning = true;
+        warnings.push('Não foi possível extrair texto de "' + file.name + '" (pode ser uma nota escaneada como imagem). Confira e separe manualmente.');
+      } else {
+        const foundInThisFile = {};
+        lines.forEach(line=>{
+          const lineNorm = normalize(line);
+          PRODUCTS.forEach(product=>{
+            if(lineMatchesProduct(lineNorm, product)){
+              const qty = guessQuantity(line, product);
+              foundInThisFile[product.id] = (foundInThisFile[product.id] || 0) + (qty || 1);
+            }
+          });
+        });
+        Object.keys(foundInThisFile).forEach(pid=>{
+          state.items[pid] = (state.items[pid] || 0) + foundInThisFile[pid];
+          const prod = PRODUCTS.find(p=>p.id===pid);
+          note.matches.push(prod.label + ' (' + foundInThisFile[pid] + ')');
+        });
+        if(note.matches.length === 0){
+          note.warning = true;
+          warnings.push('Nenhum produto do catálogo foi reconhecido em "' + file.name + '". Confira manualmente.');
+        }
+      }
+
+      state.notes.push(note);
+    }catch(err){
+      warnings.push('Erro ao ler "' + file.name + '": arquivo pode estar corrompido ou protegido.');
+      state.notes.push({ id: file.name.replace(/\.pdf$/i,''), fileName: file.name, checked:false, warning:true, matches:[] });
+    }
+  }
+
+  statusLine.textContent = 'Processamento concluído.';
+  if(warnings.length){
+    warningsBox.innerHTML = warnings.map(w=>'<div class="warning">⚠ ' + w + '</div>').join('');
+  }
+
+  saveState();
+  renderResults();
+  renderNotes();
+  document.getElementById('resetBtn').style.display = 'block';
+}
+
+// ---------- RENDER ABA 1 ----------
+function populateManualSelect(){
+  const sel = document.getElementById('manualProductSelect');
+  sel.innerHTML = PRODUCTS.map(p=>'<option value="'+p.id+'">'+p.label+'</option>').join('');
+}
+
+function changeQty(productId, delta){
+  const current = state.items[productId] || 0;
+  const next = Math.max(0, current + delta);
+  if(next === 0){ delete state.items[productId]; } else { state.items[productId] = next; }
+  saveState();
+  renderResults();
+}
+
+function setQtyDirect(productId, value){
+  const n = parseInt(value, 10);
+  if(isNaN(n) || n <= 0){ delete state.items[productId]; } else { state.items[productId] = n; }
+  saveState();
+}
+
+function addManualItem(){
+  const sel = document.getElementById('manualProductSelect');
+  const qtyInput = document.getElementById('manualQtyInput');
+  const pid = sel.value;
+  const qty = parseInt(qtyInput.value, 10) || 1;
+  state.items[pid] = (state.items[pid] || 0) + qty;
+  saveState();
+  renderResults();
+}
+
+function renderResults(){
+  const hasItems = Object.keys(state.items).length > 0;
+  document.getElementById('resultCard').style.display = hasItems ? 'block' : 'none';
+  document.getElementById('emptyCard1').style.display = hasItems ? 'none' : 'block';
+  if(!hasItems) return;
+
+  const container = document.getElementById('resultsContainer');
+  container.innerHTML = '';
+
+  CATEGORY_ORDER.forEach(cat=>{
+    const catProducts = PRODUCTS.filter(p=>p.category===cat && state.items[p.id]);
+    if(catProducts.length === 0) return;
+    const block = document.createElement('div');
+    block.className = 'category-block';
+    const title = document.createElement('div');
+    title.className = 'category-title';
+    title.textContent = cat;
+    block.appendChild(title);
+    catProducts.forEach(p=>{
+      const row = document.createElement('div');
+      row.className = 'product-row';
+      row.innerHTML =
+        '<div class="product-name">'+p.label+'</div>'+
+        '<div class="product-qty">'+
+          '<button class="qty-step" onclick="changeQty(\''+p.id+'\', -1)">−</button>'+
+          '<input type="number" min="0" value="'+state.items[p.id]+'" onchange="setQtyDirect(\''+p.id+'\', this.value); renderResults();">'+
+          '<button class="qty-step" onclick="changeQty(\''+p.id+'\', 1)">+</button>'+
+        '</div>';
+      block.appendChild(row);
+    });
+    container.appendChild(block);
+  });
+}
+
+// ---------- RENDER ABA 2 ----------
+function toggleNoteChecked(index){
+  state.notes[index].checked = !state.notes[index].checked;
+  saveState();
+  renderNotes();
+}
+
+function renderNotes(){
+  const hasNotes = state.notes.length > 0;
+  document.getElementById('notesCard').style.display = hasNotes ? 'block' : 'none';
+  document.getElementById('emptyCard2').style.display = hasNotes ? 'none' : 'block';
+
+  const total = state.notes.length;
+  const checked = state.notes.filter(n=>n.checked).length;
+  document.getElementById('progressLabel').textContent = checked + ' de ' + total + ' conferidas';
+  document.getElementById('progressBar').style.width = total ? (checked/total*100)+'%' : '0%';
+
+  if(!hasNotes) return;
+
+  const container = document.getElementById('notesContainer');
+  container.innerHTML = '';
+  state.notes.forEach((note, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'note-row';
+    const tagsHtml = note.matches.length
+      ? '<div class="note-tags">'+note.matches.join(', ')+'</div>'
+      : '';
+    const warnHtml = note.warning
+      ? '<div class="tag-warn">Verificar manualmente</div>'
+      : '';
+    row.innerHTML =
+      '<input type="checkbox" '+(note.checked ? 'checked' : '')+' onchange="toggleNoteChecked('+idx+')">'+
+      '<div class="note-info">'+
+        '<div class="note-id '+(note.checked?'checked':'')+'">Pedido/Nota: '+note.id+'</div>'+
+        '<div class="note-file">'+note.fileName+'</div>'+
+        tagsHtml + warnHtml +
+      '</div>';
+    container.appendChild(row);
+  });
+}
+
+// ---------- RESET ----------
+function resetSession(){
+  if(!confirm('Isso vai apagar a lista e a conferência atuais. Continuar?')) return;
+  state = { items:{}, notes:[] };
+  saveState();
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('statusLine').textContent = '';
+  document.getElementById('warningsBox').innerHTML = '';
+  document.getElementById('pdfInput').value = '';
+  document.getElementById('resetBtn').style.display = 'none';
+  renderResults();
+  renderNotes();
+}
+
+// ---------- INICIALIZAÇÃO ----------
+populateManualSelect();
+loadState();
+renderResults();
+renderNotes();
+if(state.notes && state.notes.length){
+  document.getElementById('resetBtn').style.display = 'block';
+}
+</script>
+
+</body>
+</html>
