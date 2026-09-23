@@ -34,6 +34,16 @@ O site resolve dois problemas:
 - Termogênico 300g
 - Kit Especial (Whey Pro + Creatina 100g + coqueteleira diferente do kit normal)
 
+### Regras de kits e equivalências (confirmadas pelo usuário)
+- Kits nunca entram na lista como "kit": são desmontados e cada peça soma
+  1 unidade no produto correspondente.
+- "Kit Suplemento Whey Protein + Creatina Pura + Coqueteleira Shaker - <sabor>"
+  é o Kit Especial (só existe na Shopee) = 1 Whey Pro do sabor + 1 Creatina
+  100g + 1 coqueteleira do kit. Esses três itens só existem dentro do kit.
+- Os outros kits já vêm na nota como produtos unitários normais.
+- "Magnesio Inositol ... 210g Maracujá" na nota = o Magnésio do catálogo.
+- Não existe creatina de 2kg no estoque: "Creatina ... 2kg" = 2 Creatinas 1kg.
+
 ## Restrições técnicas (não mudar sem avisar)
 - Continuar em **um único arquivo HTML** — sem servidor, sem serviço pago,
   sem etapa de build. Precisa funcionar hospedado como página estática pura.

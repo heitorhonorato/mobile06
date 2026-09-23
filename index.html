@@ -232,6 +232,7 @@
   .note-id.checked{ color: var(--good); text-decoration: line-through; opacity: 0.75; }
   .note-file{ font-size: 12.5px; color: var(--ink-soft); margin-top: 1px; }
   .note-tags{ margin-top: 4px; font-size: 12px; color: var(--ink-soft); }
+  .note-parts{ color: var(--accent-dark); }
   .tag-warn{
     display: inline-block;
     background: var(--warn-bg);
@@ -349,9 +350,26 @@ const PRODUCTS = [
   { id:'magnesio',           label:'Magnésio 300g',                              category:'Outros Suplementos',keywords:[['magnesio']], exclude:['kit'] },
   { id:'termogenico',        label:'Termogênico 300g',                           category:'Outros Suplementos',keywords:[['termogenico']], exclude:['kit'] },
   { id:'coqueteleira',       label:'Coqueteleira 700ml',                         category:'Acessórios',        keywords:[['coqueteleira'],['700']], exclude:['kit'] },
-  { id:'kit_especial',       label:'Kit Especial',                               category:'Kits',              keywords:[['kit especial']] },
+  // Itens que só aparecem dentro do Kit Especial da Shopee (não são vendidos avulsos)
+  { id:'wheypro_baunilha',   label:'Whey Pro Baunilha (do kit)',                 category:'Itens do Kit Especial', keywords:[] },
+  { id:'wheypro_morango',    label:'Whey Pro Morango (do kit)',                  category:'Itens do Kit Especial', keywords:[] },
+  { id:'wheypro_chocolate',  label:'Whey Pro Chocolate (do kit)',                category:'Itens do Kit Especial', keywords:[] },
+  { id:'creatina_100',       label:'Creatina 100g (do kit)',                     category:'Itens do Kit Especial', keywords:[] },
+  { id:'coqueteleira_kit',   label:'Coqueteleira do kit',                        category:'Itens do Kit Especial', keywords:[] },
 ];
-const CATEGORY_ORDER = ['Whey','Creatina','Pré-Treino','Outros Suplementos','Acessórios','Kits'];
+const CATEGORY_ORDER = ['Whey','Creatina','Pré-Treino','Outros Suplementos','Acessórios','Itens do Kit Especial'];
+
+// ---------- KITS ----------
+// Um kit não entra na lista como "kit": ele é desmontado e cada peça soma 1 no produto correspondente.
+// components: [id do produto, quantas unidades vão em cada kit]
+const KITS = [
+  // Kit Especial (só Shopee): "Kit Suplemento Whey Protein + Creatina Pura + Coqueteleira Shaker - <sabor>"
+  { label:'Kit Especial - Baunilha',  keywords:[['kit'],['whey'],['baunilha']],  components:[['wheypro_baunilha',1],['creatina_100',1],['coqueteleira_kit',1]] },
+  { label:'Kit Especial - Morango',   keywords:[['kit'],['whey'],['morango']],   components:[['wheypro_morango',1],['creatina_100',1],['coqueteleira_kit',1]] },
+  { label:'Kit Especial - Chocolate', keywords:[['kit'],['whey'],['chocolate']], components:[['wheypro_chocolate',1],['creatina_100',1],['coqueteleira_kit',1]] },
+  // Não existe creatina de 2kg no estoque: vão 2 potes de 1kg
+  { label:'Creatina 2kg',             keywords:[['creatina'],['2kg','2 kg','2000']], exclude:['kit'], components:[['creatina_1000',2]] },
+];
 const UNKNOWN_CATEGORY = 'Fora do catálogo (conferir o nome)';
 
 // ---------- ESTADO ----------
@@ -434,24 +452,36 @@ async function extractPagesFromPdf(arrayBuffer){
 // ---------- LEITURA DA TABELA DE PRODUTOS DA NOTA ----------
 // Linha de item da DANFE: "CÓD DESCRIÇÃO UN QTD V.UNIT V.TOTAL"
 // ex: "55 Creatina Monohidratada 100% Pura 500g - UN 2,000 32,450 64,90"
-const ITEM_RE = /^(\d+)\s+(.+?)\s+([A-Z]{1,4})\s+(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s+(\d[\d.]*,\d+)\s+(\d[\d.]*,\d+)$/;
+// (quando a tabela quebra de página, a descrição pode vir na linha de cima e o código sozinho com os números)
+const ITEM_RE = /^(\d+)\s+(?:(.+?)\s+)?([A-Z]{1,4})\s+(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s+(\d[\d.]*,\d+)\s+(\d[\d.]*,\d+)$/;
+const TABLE_HEADER_RE = /C[OÓ]D\.?\s+DESCRI/i;
 
 // Lê os itens da tabela. Devolve null se a página não tiver a tabela no formato esperado.
 function parseItemTable(lines){
-  const headerIdx = lines.findIndex(l => /C[OÓ]D\.?\s+DESCRI/i.test(l) && /\bQTD\b/i.test(l));
+  const headerIdx = lines.findIndex(l => TABLE_HEADER_RE.test(l) && /\bQTD\b/i.test(l));
   if(headerIdx < 0) return null;
   const items = [];
   let current = null;
+  let pending = [];   // linhas de descrição que apareceram antes da linha com o código
   for(let i=headerIdx+1; i<lines.length; i++){
     const line = lines[i];
     if(/TOTAL DA N|DADOS ADICIONAIS|C[AÁ]LCULO DO IMPOSTO|TRANSPORTADOR/i.test(line)) break;
+    if(TABLE_HEADER_RE.test(line)){
+      // cabeçalho repetido na página seguinte: o próximo texto já é de outro item
+      current = null;
+      continue;
+    }
     const m = line.match(ITEM_RE);
     if(m){
-      current = { code: m[1], desc: m[2], qty: parseBrNumber(m[4]) };
+      const desc = pending.concat(m[2] ? [m[2]] : []).join(' ');
+      current = { code: m[1], desc, qty: parseBrNumber(m[4]) };
       items.push(current);
+      pending = [];
     } else if(current){
       // a descrição do produto continua na linha de baixo (ex: o sabor)
       current.desc += ' ' + line;
+    } else {
+      pending.push(line);
     }
   }
   return items;
@@ -459,7 +489,36 @@ function parseItemTable(lines){
 
 function findProduct(text){
   const norm = normalize(text);
-  return PRODUCTS.find(product => lineMatchesProduct(norm, product)) || null;
+  return PRODUCTS.find(product => product.keywords.length && lineMatchesProduct(norm, product)) || null;
+}
+
+function findKit(text){
+  const norm = normalize(text);
+  return KITS.find(kit => lineMatchesProduct(norm, kit)) || null;
+}
+
+function productLabel(id){
+  const p = PRODUCTS.find(p=>p.id===id);
+  return p ? p.label : id;
+}
+
+// Descobre o que separar para um item da nota.
+// Devolve {label, qty, adds:[{key, qty}], parts?, unknown?}; "adds" é o que soma na lista de separação.
+function resolveItem(desc, qty, code){
+  const kit = findKit(desc);
+  if(kit){
+    return {
+      label: kit.label, qty,
+      adds: kit.components.map(([id, n]) => ({ key: id, qty: n * qty })),
+      parts: kit.components.map(([id, n]) => (n * qty) + '× ' + productLabel(id))
+    };
+  }
+  const product = findProduct(desc);
+  if(product){
+    return { label: product.label, qty, adds: [{ key: product.id, qty }] };
+  }
+  const key = 'nf:' + (code || normalize(desc));
+  return { label: desc.replace(/\s+/g,' ').trim(), qty, adds: [{ key, qty }], unknown: true };
 }
 
 function lineMatchesProduct(lineNorm, product){
@@ -480,8 +539,7 @@ function lineMatchesProduct(lineNorm, product){
 function guessItemsByKeywords(lines){
   const found = [];
   lines.forEach(line=>{
-    const product = findProduct(line);
-    if(product) found.push({ product, qty: 1 });
+    if(findKit(line) || findProduct(line)) found.push(resolveItem(line, 1));
   });
   return found;
 }
@@ -500,7 +558,24 @@ function extractInfo(lines){
   return { orderId, nf, accessKey, customer };
 }
 
-// Transforma o texto de uma página em uma nota com a lista de produtos.
+// Separa o texto do PDF em blocos, um por nota. Cada nota começa com o título "DANFE".
+// Assim funciona tanto com uma nota por página quanto com uma nota que continua na página seguinte.
+// Se o PDF não tiver o título "DANFE", cada página vira um bloco.
+function splitIntoNoteBlocks(pages){
+  const all = [];
+  pages.forEach(page => page.lines.forEach(line => all.push({ line, page: page.number })));
+  const starts = [];
+  all.forEach((x, i) => { if(/^DANFE\b/i.test(x.line)) starts.push(i); });
+  if(starts.length === 0) return pages;
+  return starts.map((start, k) => {
+    const from = k === 0 ? 0 : start;
+    const to = k + 1 < starts.length ? starts[k+1] : all.length;
+    const slice = all.slice(from, to);
+    return { number: all[start].page, lines: slice.map(x => x.line) };
+  });
+}
+
+// Transforma o texto de uma nota em uma nota com a lista de produtos.
 function buildNoteFromPage(page, fileName){
   const info = extractInfo(page.lines);
   const note = {
@@ -513,26 +588,18 @@ function buildNoteFromPage(page, fileName){
     checked: false,
     warning: false,
     approx: false,
-    lines: []   // [{key, label, qty}]
+    lines: []   // itens da nota, no formato devolvido por resolveItem()
   };
 
   const tableItems = parseItemTable(page.lines);
   if(tableItems && tableItems.length){
     tableItems.forEach(item=>{
-      const product = findProduct(item.desc);
-      if(product){
-        note.lines.push({ key: product.id, label: product.label, qty: item.qty });
-      } else {
-        const label = item.desc.replace(/\s+/g,' ').trim();
-        note.lines.push({ key: 'nf:' + item.code, label, qty: item.qty, unknown: true });
-      }
+      note.lines.push(resolveItem(item.desc, item.qty, item.code));
     });
   } else {
     note.approx = true;
     note.warning = true;
-    guessItemsByKeywords(page.lines).forEach(({product, qty})=>{
-      note.lines.push({ key: product.id, label: product.label, qty });
-    });
+    note.lines.push(...guessItemsByKeywords(page.lines));
   }
   return note;
 }
@@ -564,15 +631,19 @@ async function handleFiles(event){
       const pages = await extractPagesFromPdf(buffer);
       let notesInFile = 0;
 
+      const readablePages = [];
       for(const page of pages){
         if(page.textLength < 15){
           warnings.push('Não foi possível ler o texto da página ' + page.number + ' de "' + file.name + '" (pode ser uma nota escaneada como imagem). Confira e separe essa nota manualmente.');
           state.notes.push({ id: file.name.replace(/\.pdf$/i,'') + ' (pág. ' + page.number + ')', fileName: file.name, page: page.number, checked:false, warning:true, lines:[] });
           notesInFile++;
-          continue;
+        } else {
+          readablePages.push(page);
         }
+      }
 
-        const note = buildNoteFromPage(page, file.name);
+      for(const block of splitIntoNoteBlocks(readablePages)){
+        const note = buildNoteFromPage(block, file.name);
 
         // Nota com muitos produtos pode ocupar 2 páginas: mesma chave de acesso = mesma nota.
         const prev = state.notes[state.notes.length-1];
@@ -595,8 +666,10 @@ async function handleFiles(event){
   // Soma tudo na lista de separação e gera os avisos de cada nota
   state.notes.forEach(note=>{
     (note.lines || []).forEach(line=>{
-      state.items[line.key] = (state.items[line.key] || 0) + line.qty;
-      if(line.unknown) state.labels[line.key] = line.label;
+      (line.adds || []).forEach(add=>{
+        state.items[add.key] = (state.items[add.key] || 0) + add.qty;
+        if(line.unknown) state.labels[add.key] = line.label;
+      });
     });
     if(note.approx){
       warnings.push('Pedido ' + note.id + ': a tabela de produtos não estava no formato esperado. Os produtos foram achados por palavra-chave e a quantidade foi considerada 1. Confira essa nota.');
@@ -727,7 +800,10 @@ function renderNotes(){
     row.className = 'note-row';
     const lines = note.lines || [];
     const itemsHtml = lines.length
-      ? '<div class="note-tags">'+lines.map(l=>'<div>'+formatQty(l.qty)+'× '+escapeHtml(l.label)+'</div>').join('')+'</div>'
+      ? '<div class="note-tags">'+lines.map(l=>
+          '<div>'+formatQty(l.qty)+'× '+escapeHtml(l.label)+
+          (l.parts ? ' <span class="note-parts">→ '+escapeHtml(l.parts.join(' + '))+'</span>' : '')+
+          '</div>').join('')+'</div>'
       : (note.matches && note.matches.length ? '<div class="note-tags">'+escapeHtml(note.matches.join(', '))+'</div>' : '');
     const warnHtml = note.warning
       ? '<div class="tag-warn">Verificar manualmente</div>'
