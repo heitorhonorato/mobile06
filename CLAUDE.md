@@ -36,6 +36,8 @@ O site resolve dois problemas:
 - Vandal King Jump 300g — Blue Razz / Limonade
 - Termogênico 300g
 - Kit Especial (Whey Pro + Creatina 100g + coqueteleira diferente do kit normal)
+- Kit Creatina 1kg = 2× Creatina 500g
+- Kit 600g = 2× Creatina 300g
 
 ### Regras de kits e equivalências (confirmadas pelo usuário)
 - Kits nunca entram na lista como "kit": são desmontados e cada peça soma
@@ -47,6 +49,17 @@ O site resolve dois problemas:
 - "Magnesio Inositol ... 210g Maracujá" na nota = o Magnésio do catálogo.
 - Não existe creatina de 2kg no estoque: "Creatina ... 2kg" = 2 Creatinas 1kg.
 
+## Novas funcionalidades
+- **Aba de Início:** ao abrir o site, escolha se as notas são da Shopee ou Mercado Livre.
+  A escolha é salva no relatório.
+- **Relatório:** mostra todas as notas processadas, a data e hora da leva, produtos
+  separados e quaisquer problemas encontrados (produtos fora do catálogo, tabelas
+  não reconhecidas, etc). Trazir erros para a conversa para resolvermos.
+- **Sistema de erros:** quando o site não conseguir reconhecer um produto ou a tabela
+  estiver num formato inesperado, registra exatamente qual nota teve o problema
+  e mostra no relatório.
+
+## Restrições técnicas
 ## Restrições técnicas (não mudar sem avisar)
 - Continuar em **um único arquivo HTML** — sem servidor, sem serviço pago,
   sem etapa de build. Precisa funcionar hospedado como página estática pura.
