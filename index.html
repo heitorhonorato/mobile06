@@ -80,6 +80,71 @@
   }
   section.tab{ display: none; }
   section.tab.active{ display: block; }
+  
+  .ecommerce-choice{
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .ecommerce-btn{
+    flex: 1;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: var(--radius);
+    border: 2px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .ecommerce-btn.active{
+    background: var(--accent);
+    color: #1A1200;
+    border-color: var(--accent);
+  }
+  
+  .error-item{
+    background: var(--warn-bg);
+    border-left: 4px solid var(--warn);
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+  }
+  .error-item-title{
+    font-weight: 700;
+    color: var(--warn);
+    font-size: 14px;
+  }
+  .error-item-desc{
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  
+  .report-note{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .report-note-header{
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 15px;
+  }
+  .report-note-meta{
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  .report-note-items{
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    padding: 6px 0 0 12px;
+    border-left: 1px solid var(--line);
+  }
 
   .card{
     background: var(--panel);
@@ -267,8 +332,10 @@
 </header>
 
 <nav class="tabs">
+  <button id="tabBtn0" onclick="showTab(0)">Início</button>
   <button id="tabBtn1" class="active" onclick="showTab(1)">Lista de Separação</button>
   <button id="tabBtn2" onclick="showTab(2)">Conferência de Pedidos</button>
+  <button id="tabBtn3" onclick="showTab(3)">Relatório</button>
 </nav>
 
 <main>
@@ -325,6 +392,29 @@
     </div>
   </section>
 
+
+  <!-- ABA 0: INÍCIO -->
+  <section id="tab0" class="tab">
+    <div class="card">
+      <h2>Selecionar e-commerce</h2>
+      <div class="muted" style="margin-bottom:14px;">Qual é a origem das notas desta leva?</div>
+      <div class="ecommerce-choice">
+        <button class="ecommerce-btn active" id="ecomm-shopee" onclick="setEcommerce('shopee')">Shopee</button>
+        <button class="ecommerce-btn" id="ecomm-mercado" onclick="setEcommerce('mercado-livre')">Mercado Livre</button>
+      </div>
+      <button class="btn block" onclick="goToTab(1)" style="margin-top:20px;">Continuar</button>
+    </div>
+  </section>
+
+  <!-- ABA 3: RELATÓRIO -->
+  <section id="tab3" class="tab">
+    <div class="card">
+      <h2>Relatório da leva</h2>
+      <div id="reportSummary" class="muted"></div>
+      <div id="reportContent" style="margin-top:14px;"></div>
+      <div id="reportEmpty" class="empty-state">Nenhuma leva processada ainda.</div>
+    </div>
+  </section>
 </main>
 
 <footer>Processamento 100% local no navegador — nada é enviado para servidores.</footer>
@@ -370,6 +460,9 @@ const KITS = [
   { label:'Kit Especial - Chocolate', keywords:[['kit'],['whey'],['chocolate']], components:[['wheypro_chocolate',1],['creatina_100',1],['coqueteleira_kit',1]] },
   // Não existe creatina de 2kg no estoque: vão 2 potes de 1kg
   { label:'Creatina 2kg',             keywords:[['creatina'],['2kg','2 kg','2000']], exclude:['kit'], components:[['creatina_1000',2]] },
+  // Kits de creatina
+  { label:'Kit Creatina 1kg',         keywords:[['kit'],['creatina'],['1kg','1 kg']], exclude:['2kg'], components:[['creatina_500',2]] },
+  { label:'Kit 600g',                 keywords:[['kit'],['600']], exclude:['kit especial'], components:[['creatina_300',2]] },
 ];
 const UNKNOWN_CATEGORY = 'Fora do catálogo (conferir o nome)';
 
@@ -377,7 +470,8 @@ const UNKNOWN_CATEGORY = 'Fora do catálogo (conferir o nome)';
 // items: {chave: quantidade}. A chave é o id do catálogo, ou "nf:<código>" para produto fora do catálogo.
 // labels: {chave: nome} só para os produtos fora do catálogo (nome copiado da nota).
 // notes: [{id, nf, customer, fileName, page, checked, warning, approx, lines:[{label, qty}]}]
-let state = { items: {}, labels: {}, notes: [] };
+// errors: [{message, noteId, noteIndex}] para rastrear erros por nota
+let state = { items: {}, labels: {}, notes: [], ecommerce: 'shopee', processedAt: null, errors: [] };
 
 function normalize(str){
   return (str||'')
@@ -414,14 +508,73 @@ function loadState(){
   state.items = state.items || {};
   state.labels = state.labels || {};
   state.notes = state.notes || [];
+  state.ecommerce = state.ecommerce || 'shopee';
+  state.processedAt = state.processedAt || null;
+  state.errors = state.errors || [];
+}
+
+
+// ---------- RENDER RELATÓRIO ----------
+function renderReport(){
+  const hasData = state.notes && state.notes.length > 0;
+  document.getElementById('reportEmpty').style.display = hasData ? 'none' : 'block';
+  document.getElementById('reportSummary').style.display = hasData ? 'block' : 'none';
+  document.getElementById('reportContent').style.display = hasData ? 'block' : 'none';
+  
+  if(!hasData) return;
+  
+  const date = new Date(state.processedAt);
+  const fmt = date.toLocaleString('pt-BR');
+  const ecomm = state.ecommerce === 'mercado-livre' ? 'Mercado Livre' : 'Shopee';
+  
+  document.getElementById('reportSummary').innerHTML = 
+    '<strong>E-commerce:</strong> ' + ecomm + ' | ' +
+    '<strong>Data/Hora:</strong> ' + fmt + ' | ' +
+    '<strong>Notas:</strong> ' + state.notes.length +
+    (state.errors && state.errors.length ? ' | <strong style="color:var(--warn);">Erros: ' + state.errors.length + '</strong>' : '');
+  
+  const errors = state.errors || [];
+  let html = '';
+  if(errors.length){
+    html += '<h3 style="color:var(--warn);margin-bottom:10px;">⚠ Itens que precisam conferência manual</h3>';
+    errors.forEach(err => {
+      html += '<div class="error-item">' +
+        '<div class="error-item-title">' + escapeHtml(err.noteId) + '</div>' +
+        '<div class="error-item-desc">' + escapeHtml(err.message) + '</div>' +
+        '</div>';
+    });
+    html += '<hr style="margin:14px 0; border:none; border-top:1px solid var(--line);">';
+  }
+  
+  html += '<h3 style="margin-bottom:10px;">Notas processadas</h3>';
+  html += state.notes.map(note => {
+    const items = (note.lines || []).map(l => '• ' + formatQty(l.qty) + '× ' + escapeHtml(l.label)).join('<br>');
+    const warn = note.warning ? '<div class="tag-warn" style="margin-top:6px;">⚠ Verificar manualmente</div>' : '';
+    return '<div class="report-note">' +
+      '<div class="report-note-header">' + escapeHtml(note.id) + '</div>' +
+      (note.customer ? '<div class="report-note-meta">Cliente: ' + escapeHtml(note.customer) + '</div>' : '') +
+      '<div class="report-note-items">' + items + '</div>' + warn +
+      '</div>';
+  }).join('');
+  
+  document.getElementById('reportContent').innerHTML = html;
 }
 
 // ---------- ABAS ----------
 function showTab(n){
-  document.getElementById('tab1').classList.toggle('active', n===1);
-  document.getElementById('tab2').classList.toggle('active', n===2);
-  document.getElementById('tabBtn1').classList.toggle('active', n===1);
-  document.getElementById('tabBtn2').classList.toggle('active', n===2);
+  for(let i=0; i<=3; i++){
+    const tab = document.getElementById('tab'+i);
+    const btn = document.getElementById('tabBtn'+i);
+    if(tab) tab.classList.toggle('active', n===i);
+    if(btn) btn.classList.toggle('active', n===i);
+  }
+}
+function goToTab(n){ showTab(n); }
+function setEcommerce(name){
+  state.ecommerce = name;
+  document.getElementById('ecomm-shopee').classList.toggle('active', name==='shopee');
+  document.getElementById('ecomm-mercado').classList.toggle('active', name==='mercado-livre');
+  saveState();
 }
 
 // ---------- LEITURA DE PDF ----------
@@ -652,7 +805,7 @@ async function handleFiles(event){
   statusLine.textContent = 'Processando ' + files.length + ' arquivo(s)...';
 
   // nova leva: reinicia estado
-  state = { items: {}, labels: {}, notes: [] };
+  state = { items: {}, labels: {}, notes: [], ecommerce: state.ecommerce || 'shopee', processedAt: new Date().toISOString(), errors: [] };
 
   const warnings = [];
 
@@ -734,6 +887,12 @@ async function handleFiles(event){
   renderResults();
   renderNotes();
   document.getElementById('resetBtn').style.display = 'block';
+}
+
+
+function recordError(message, noteId, noteIndex){
+  state.errors = state.errors || [];
+  state.errors.push({ message, noteId, noteIndex, timestamp: new Date().toISOString() });
 }
 
 // ---------- RENDER ABA 1 ----------
@@ -862,7 +1021,7 @@ function renderNotes(){
 // ---------- RESET ----------
 function resetSession(){
   if(!confirm('Isso vai apagar a lista e a conferência atuais. Continuar?')) return;
-  state = { items:{}, labels:{}, notes:[] };
+  state = { items:{}, labels:{}, notes:[], ecommerce: state.ecommerce || 'shopee', processedAt: null, errors: [] };
   saveState();
   document.getElementById('fileList').innerHTML = '';
   document.getElementById('statusLine').textContent = '';
@@ -871,6 +1030,8 @@ function resetSession(){
   document.getElementById('resetBtn').style.display = 'none';
   renderResults();
   renderNotes();
+  renderReport();
+  showTab(0);
 }
 
 // ---------- INICIALIZAÇÃO ----------
@@ -878,8 +1039,17 @@ populateManualSelect();
 loadState();
 renderResults();
 renderNotes();
+renderReport();
 if(state.notes && state.notes.length){
   document.getElementById('resetBtn').style.display = 'block';
+  showTab(1);
+} else {
+  showTab(0);
+}
+// Atualizar e-commerce button ao carregar
+if(state.ecommerce){
+  document.getElementById('ecomm-shopee').classList.toggle('active', state.ecommerce==='shopee');
+  document.getElementById('ecomm-mercado').classList.toggle('active', state.ecommerce==='mercado-livre');
 }
 </script>
 
