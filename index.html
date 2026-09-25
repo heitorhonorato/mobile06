@@ -393,7 +393,7 @@
 
     <div class="card" id="printCard" style="display:none;">
       <h2>Imprimir notas em ordem</h2>
-      <div class="muted">As notas foram agrupadas por conteúdo do pedido. Os grupos com mais pedidos saem primeiro, então pedidos iguais saem juntos na impressora.</div>
+      <div class="muted">As notas foram agrupadas por conteúdo do pedido. Primeiro saem os pedidos com um só tipo de produto, depois os pedidos mistos; em cada parte, os grupos com mais pedidos saem primeiro.</div>
       <div id="printGroups" style="margin-top:12px;"></div>
       <div id="printWarnings"></div>
       <button class="btn block" id="printBtn" onclick="generatePrintFiles()">Gerar arquivo para imprimir</button>
@@ -1020,7 +1020,11 @@ function buildPrintGroups(){
     const i = p ? CATEGORY_ORDER.indexOf(p.category) : -1;
     return i < 0 ? 99 : i;
   };
+  // Primeiro os pedidos com um só tipo de produto (ex: só Creatina 1000g), depois os mistos.
+  // Dentro de cada parte, do grupo com mais pedidos para o com menos.
+  const isSingle = g => g.lines.length === 1 ? 0 : 1;
   const groups = Array.from(map.values()).sort((a, b) =>
+    isSingle(a) - isSingle(b) ||
     b.notes.length - a.notes.length ||
     a.lines.length - b.lines.length ||
     catRank(a.lines[0].label) - catRank(b.lines[0].label) ||
@@ -1035,13 +1039,19 @@ function renderPrintGroups(){
   card.style.display = hasNotes ? 'block' : 'none';
   if(!hasNotes) return;
   const groups = buildPrintGroups();
-  document.getElementById('printGroups').innerHTML = groups.map((g, i) =>
+  let lastPart = null;
+  document.getElementById('printGroups').innerHTML = groups.map((g, i) => {
+    const part = g.problem ? 'Conferir manualmente' : (g.lines.length === 1 ? 'Um só tipo de produto' : 'Pedidos mistos');
+    const title = part !== lastPart ? '<div class="category-title" style="margin-top:10px;">' + part + '</div>' : '';
+    lastPart = part;
+    return title +
     '<div class="print-group">' +
       '<div class="print-group-count">' + g.notes.length + '</div>' +
       '<div class="print-group-label">' + (i+1) + '. ' + escapeHtml(g.label) +
         '<div class="print-group-sub">' + (g.notes.length === 1 ? '1 pedido' : g.notes.length + ' pedidos') + '</div>' +
       '</div>' +
-    '</div>').join('');
+    '</div>';
+  }).join('');
 
   const warn = [];
   const available = printStore.sources.filter(Boolean).length;

@@ -56,8 +56,10 @@ O site resolve dois problemas:
   separados e quaisquer problemas encontrados (produtos fora do catálogo, tabelas
   não reconhecidas, etc). Trazer erros para a conversa para resolvermos.
 - **Imprimir notas em ordem:** agrupa as notas com o mesmo conteúdo (ex: todas
-  as de "1× Creatina 1000g") e gera um arquivo novo com as notas nessa ordem,
-  grupos maiores primeiro. PDF é reordenado por página com pdf-lib (só funciona
+  as de "1× Creatina 1000g") e gera um arquivo novo com as notas nessa ordem:
+  primeiro os pedidos com um só tipo de produto, depois os mistos; em cada
+  parte, grupos maiores primeiro. Quantidades diferentes (1× e 6× Creatina
+  300g) ficam em grupos separados (confirmado pelo usuário). PDF é reordenado por página com pdf-lib (só funciona
   se cada nota começar numa página própria); HTML da Olist é remontado com os
   blocos de cada nota. Os arquivos originais ficam só na memória.
 - **Sistema de erros:** quando o site não conseguir reconhecer um produto ou a tabela
