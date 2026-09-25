@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Separação de Pedidos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <style>
   :root{
     --bg: #F4F5F2;
@@ -60,8 +61,8 @@
   }
   nav.tabs button{
     flex: 1;
-    padding: 13px 8px;
-    font-size: 15px;
+    padding: 13px 4px;
+    font-size: 14px;
     font-weight: 600;
     border-radius: var(--radius);
     border: none;
@@ -103,6 +104,28 @@
     border-color: var(--accent);
   }
   
+  .print-group{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 2px;
+    border-bottom: 1px solid #EEEFEA;
+  }
+  .print-group:last-child{ border-bottom: none; }
+  .print-group-count{
+    min-width: 44px;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--accent-dark);
+    background: #FBF1E4;
+    border-radius: 8px;
+    padding: 6px 4px;
+  }
+  .print-group-label{ font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+  .print-group-sub{ font-size: 12px; color: var(--ink-soft); font-weight: 400; }
+  a.btn{ text-decoration: none; }
+
   .error-item{
     background: var(--warn-bg);
     border-left: 4px solid var(--warn);
@@ -168,7 +191,7 @@
     text-align: center;
   }
   input[type="file"]{ display: none; }
-  label.file-btn, button.btn{
+  label.file-btn, button.btn, a.btn{
     display: inline-block;
     background: var(--accent);
     color: #1A1200;
@@ -185,7 +208,7 @@
     background: #EDEFEA;
     color: var(--ink);
   }
-  button.btn.block{ display: block; width: 100%; margin-top: 10px; }
+  button.btn.block, a.btn.block{ display: block; width: 100%; margin-top: 10px; }
   button.btn.small{ font-size: 13px; padding: 9px 14px; }
   button.btn:disabled{ opacity: 0.5; }
 
@@ -333,8 +356,8 @@
 
 <nav class="tabs">
   <button id="tabBtn0" onclick="showTab(0)">Início</button>
-  <button id="tabBtn1" class="active" onclick="showTab(1)">Lista de Separação</button>
-  <button id="tabBtn2" onclick="showTab(2)">Conferência de Pedidos</button>
+  <button id="tabBtn1" class="active" onclick="showTab(1)">Separação</button>
+  <button id="tabBtn2" onclick="showTab(2)">Conferência</button>
   <button id="tabBtn3" onclick="showTab(3)">Relatório</button>
 </nav>
 
@@ -366,6 +389,15 @@
         <input type="number" id="manualQtyInput" min="1" value="1">
         <button class="btn small" onclick="addManualItem()">Adicionar</button>
       </div>
+    </div>
+
+    <div class="card" id="printCard" style="display:none;">
+      <h2>Imprimir notas em ordem</h2>
+      <div class="muted">As notas foram agrupadas por conteúdo do pedido. Os grupos com mais pedidos saem primeiro, então pedidos iguais saem juntos na impressora.</div>
+      <div id="printGroups" style="margin-top:12px;"></div>
+      <div id="printWarnings"></div>
+      <button class="btn block" id="printBtn" onclick="generatePrintFiles()">Gerar arquivo para imprimir</button>
+      <div id="printOutput"></div>
     </div>
 
     <div class="card" id="emptyCard1">
@@ -608,11 +640,9 @@ function isHtmlFile(file){
   return /\.html?$/i.test(file.name) || file.type === 'text/html';
 }
 
-// Transforma a página HTML em linhas de texto, no mesmo formato que sai do PDF:
+// Transforma elementos HTML em linhas de texto, no mesmo formato que sai do PDF:
 // cada parágrafo, título ou linha de tabela vira uma linha; as células da tabela ficam separadas por espaço.
-function htmlToPage(htmlText){
-  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-  doc.querySelectorAll('script, style, img, svg').forEach(el => el.remove());
+function htmlNodesToLines(nodes){
   const BLOCK = /^(P|DIV|TR|TABLE|THEAD|TBODY|H[1-6]|LI|UL|OL|SECTION|HEADER|FOOTER)$/;
   const lines = [];
   let buffer = '';
@@ -632,9 +662,37 @@ function htmlToPage(htmlText){
     if(tag === 'TD' || tag === 'TH') buffer += ' ';
     if(isBlock) flush();
   };
-  walk(doc.body);
+  nodes.forEach(walk);
   flush();
-  return { number: null, lines, textLength: lines.join('').length };
+  return lines;
+}
+
+// Lê o HTML da Olist. Cada nota começa num bloco "header-danfe"; guardamos o HTML de cada nota
+// para depois montar o arquivo de impressão na ordem nova.
+// Devolve { head, blocks:[{ number, lines, textLength, html }] }.
+function splitHtmlNotes(htmlText){
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  doc.querySelectorAll('script').forEach(el => el.remove());
+  const head = doc.head ? doc.head.innerHTML : '';
+  const groups = [];
+  let current = null;
+  Array.from(doc.body.childNodes).forEach(node => {
+    const isEl = node.nodeType === Node.ELEMENT_NODE;
+    if(isEl && node.classList.contains('page-break')) return;
+    if(isEl && node.classList.contains('header-danfe') || !current){
+      current = [];
+      groups.push(current);
+    }
+    current.push(node);
+  });
+  const blocks = groups.map(nodes => {
+    const html = nodes.map(n => n.nodeType === Node.ELEMENT_NODE ? n.outerHTML : (n.textContent || '')).join('');
+    const textNodes = nodes.map(n => n.cloneNode(true));
+    textNodes.forEach(n => { if(n.querySelectorAll) n.querySelectorAll('style, img, svg').forEach(el => el.remove()); });
+    const lines = htmlNodesToLines(textNodes.filter(n => !(n.tagName === 'STYLE' || n.tagName === 'IMG')));
+    return { number: null, lines, textLength: lines.join('').length, html };
+  }).filter(b => b.textLength > 0 || /<img/i.test(b.html));
+  return { head, blocks };
 }
 
 // ---------- LEITURA DA TABELA DE PRODUTOS DA NOTA ----------
@@ -754,12 +812,22 @@ function splitIntoNoteBlocks(pages){
   pages.forEach(page => page.lines.forEach(line => all.push({ line, page: page.number })));
   const starts = [];
   all.forEach((x, i) => { if(/^DANFE\b/i.test(x.line)) starts.push(i); });
-  if(starts.length === 0) return pages;
+  if(starts.length === 0) return pages.map(page => ({ ...page, pages: [page.number], pagesClean: true }));
+  const lastPage = pages.length ? pages[pages.length-1].number : 1;
   return starts.map((start, k) => {
     const from = k === 0 ? 0 : start;
     const to = k + 1 < starts.length ? starts[k+1] : all.length;
     const slice = all.slice(from, to);
-    return { number: all[start].page, lines: slice.map(x => x.line) };
+    // Páginas da nota: da página onde ela começa até a página antes da próxima nota.
+    // Só dá para reordenar por página se cada nota começar no topo de uma página só dela.
+    const startPage = all[start].page;
+    const nextPage = k + 1 < starts.length ? all[starts[k+1]].page : lastPage + 1;
+    const endPage = Math.max(startPage, nextPage - 1);
+    const lineInPage = all.slice(0, start).filter(x => x.page === startPage).length;
+    const pagesClean = nextPage > startPage && lineInPage <= 3;
+    const notePages = [];
+    for(let pg = startPage; pg <= endPage; pg++) notePages.push(pg);
+    return { number: startPage, lines: slice.map(x => x.line), pages: notePages, pagesClean };
   });
 }
 
@@ -805,6 +873,8 @@ async function handleFiles(event){
   statusLine.textContent = 'Processando ' + files.length + ' arquivo(s)...';
 
   // nova leva: reinicia estado
+  printStore = { files: [], sources: [], htmlHead: '' };
+  document.getElementById('printOutput').innerHTML = '';
   state = { items: {}, labels: {}, notes: [], ecommerce: state.ecommerce || 'shopee', processedAt: new Date().toISOString(), errors: [] };
 
   const warnings = [];
@@ -815,57 +885,87 @@ async function handleFiles(event){
     fileListEl.appendChild(rowEl);
 
     try{
-      const pages = isHtmlFile(file)
-        ? [htmlToPage(await file.text())]
-        : await extractPagesFromPdf(await file.arrayBuffer());
+      const fileIdx = printStore.files.length;
+      const isHtml = isHtmlFile(file);
+      printStore.files.push({ file, kind: isHtml ? 'html' : 'pdf', reorderable: true });
       let notesInFile = 0;
+      let blocks;
 
-      const readablePages = [];
-      for(const page of pages){
-        if(page.textLength < 15){
-          const where = page.number ? 'da página ' + page.number + ' de "' + file.name + '" (pode ser uma nota escaneada como imagem)' : 'de "' + file.name + '" (o arquivo parece vazio)';
-          warnings.push('Não foi possível ler o texto ' + where + '. Confira e separe essa nota manualmente.');
-          state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,'') + (page.number ? ' (pág. ' + page.number + ')' : ''), fileName: file.name, page: page.number, checked:false, warning:true, lines:[] });
+      if(isHtml){
+        const parsed = splitHtmlNotes(await file.text());
+        if(!printStore.htmlHead) printStore.htmlHead = parsed.head;
+        blocks = parsed.blocks;
+        if(blocks.length === 0){
+          warnings.push('Não foi possível ler o texto de "' + file.name + '" (o arquivo parece vazio). Confira as notas manualmente.');
+          const idx = state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,''), fileName: file.name, checked:false, warning:true, lines:[] }) - 1;
+          recordError('Arquivo sem texto legível: "' + file.name + '".', state.notes[idx].id, idx);
           notesInFile++;
-        } else {
-          readablePages.push(page);
         }
+      } else {
+        const pages = await extractPagesFromPdf(await file.arrayBuffer());
+        const readablePages = [];
+        for(const page of pages){
+          if(page.textLength < 15){
+            warnings.push('Não foi possível ler o texto da página ' + page.number + ' de "' + file.name + '" (pode ser uma nota escaneada como imagem). Confira e separe essa nota manualmente.');
+            const idx = state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,'') + ' (pág. ' + page.number + ')', fileName: file.name, page: page.number, checked:false, warning:true, lines:[] }) - 1;
+            printStore.sources[idx] = { fileIdx, pages: [page.number] };
+            recordError('Página ' + page.number + ' de "' + file.name + '" sem texto (pode ser imagem escaneada).', state.notes[idx].id, idx);
+            notesInFile++;
+          } else {
+            readablePages.push(page);
+          }
+        }
+        blocks = splitIntoNoteBlocks(readablePages);
+        if(blocks.some(b => !b.pagesClean)) printStore.files[fileIdx].reorderable = false;
       }
 
-      for(const block of splitIntoNoteBlocks(readablePages)){
+      for(const block of blocks){
         const note = buildNoteFromPage(block, file.name);
+        const source = isHtml ? { fileIdx, html: block.html } : { fileIdx, pages: block.pages };
 
         // Nota com muitos produtos pode ocupar 2 páginas: mesma chave de acesso = mesma nota.
-        const prev = state.notes[state.notes.length-1];
+        const prevIdx = state.notes.length - 1;
+        const prev = state.notes[prevIdx];
         if(note.accessKey && prev && prev.accessKey === note.accessKey){
           prev.lines.push(...note.lines);
           prev.approx = prev.approx && note.approx;
+          const prevSource = printStore.sources[prevIdx];
+          if(prevSource && prevSource.pages) prevSource.pages.push(...source.pages.filter(pg => !prevSource.pages.includes(pg)));
+          if(prevSource && prevSource.html) prevSource.html += source.html;
           continue;
         }
-        state.notes.push(note);
+        const idx = state.notes.push(note) - 1;
+        printStore.sources[idx] = source;
         notesInFile++;
       }
 
       rowEl.textContent = '• ' + file.name + ' — ' + notesInFile + ' nota(s)';
     }catch(err){
       warnings.push('Erro ao ler "' + file.name + '": arquivo pode estar corrompido ou protegido.');
-      state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,''), fileName: file.name, checked:false, warning:true, lines:[] });
+      const idx = state.notes.push({ id: file.name.replace(/\.(pdf|html?)$/i,''), fileName: file.name, checked:false, warning:true, lines:[] }) - 1;
+      recordError('Não foi possível abrir o arquivo "' + file.name + '" (corrompido ou protegido).', state.notes[idx].id, idx);
     }
   }
 
   // Soma tudo na lista de separação e gera os avisos de cada nota
-  state.notes.forEach(note=>{
+  state.notes.forEach((note, idx)=>{
     (note.lines || []).forEach(line=>{
       (line.adds || []).forEach(add=>{
         state.items[add.key] = (state.items[add.key] || 0) + add.qty;
         if(line.unknown) state.labels[add.key] = line.label;
       });
+      if(line.unknown){
+        note.warning = true;
+        recordError('Produto fora do catálogo: "' + line.label + '" (qtd ' + formatQty(line.qty) + '). Confira qual produto separar.', note.id, idx);
+      }
     });
     if(note.approx){
+      recordError('A tabela de produtos não foi reconhecida. Os produtos foram achados por palavra-chave e a quantidade foi considerada 1.', note.id, idx);
       warnings.push('Pedido ' + note.id + ': a tabela de produtos não estava no formato esperado. Os produtos foram achados por palavra-chave e a quantidade foi considerada 1. Confira essa nota.');
     }
     if(note.lines && note.lines.length === 0 && note.warning === false){
       note.warning = true;
+      recordError('Nenhum produto foi encontrado na nota.', note.id, idx);
       warnings.push('Pedido ' + note.id + ': nenhum produto foi encontrado na nota. Confira manualmente.');
     }
   });
@@ -886,6 +986,8 @@ async function handleFiles(event){
   saveState();
   renderResults();
   renderNotes();
+  renderReport();
+  renderPrintGroups();
   document.getElementById('resetBtn').style.display = 'block';
 }
 
@@ -893,6 +995,155 @@ async function handleFiles(event){
 function recordError(message, noteId, noteIndex){
   state.errors = state.errors || [];
   state.errors.push({ message, noteId, noteIndex, timestamp: new Date().toISOString() });
+}
+
+// ---------- IMPRESSÃO EM ORDEM ----------
+// Arquivos originais ficam só na memória (não cabem no localStorage). Se a página recarregar,
+// é preciso enviar as notas de novo para imprimir.
+let printStore = { files: [], sources: [], htmlHead: '' };
+
+// Agrupa as notas que têm exatamente o mesmo conteúdo (ex: todas as de "1× Creatina 1000g").
+// Grupos maiores primeiro; notas com problema ficam por último.
+function buildPrintGroups(){
+  const map = new Map();
+  const problems = [];
+  state.notes.forEach((note, idx) => {
+    const lines = note.lines || [];
+    if(lines.length === 0){ problems.push(idx); return; }
+    const parts = lines.map(l => formatQty(l.qty) + '× ' + l.label).sort();
+    const key = parts.join(' + ');
+    if(!map.has(key)) map.set(key, { label: key, lines, notes: [] });
+    map.get(key).notes.push(idx);
+  });
+  const catRank = label => {
+    const p = PRODUCTS.find(p => p.label === label);
+    const i = p ? CATEGORY_ORDER.indexOf(p.category) : -1;
+    return i < 0 ? 99 : i;
+  };
+  const groups = Array.from(map.values()).sort((a, b) =>
+    b.notes.length - a.notes.length ||
+    a.lines.length - b.lines.length ||
+    catRank(a.lines[0].label) - catRank(b.lines[0].label) ||
+    a.label.localeCompare(b.label));
+  if(problems.length) groups.push({ label: 'Conferir manualmente (não foi possível ler)', notes: problems, problem: true });
+  return groups;
+}
+
+function renderPrintGroups(){
+  const card = document.getElementById('printCard');
+  const hasNotes = state.notes.length > 0;
+  card.style.display = hasNotes ? 'block' : 'none';
+  if(!hasNotes) return;
+  const groups = buildPrintGroups();
+  document.getElementById('printGroups').innerHTML = groups.map((g, i) =>
+    '<div class="print-group">' +
+      '<div class="print-group-count">' + g.notes.length + '</div>' +
+      '<div class="print-group-label">' + (i+1) + '. ' + escapeHtml(g.label) +
+        '<div class="print-group-sub">' + (g.notes.length === 1 ? '1 pedido' : g.notes.length + ' pedidos') + '</div>' +
+      '</div>' +
+    '</div>').join('');
+
+  const warn = [];
+  const available = printStore.sources.filter(Boolean).length;
+  if(available === 0){
+    warn.push('Para gerar o arquivo de impressão, envie as notas de novo (os arquivos não ficam salvos quando a página recarrega).');
+  } else {
+    printStore.files.forEach(f => {
+      if(f.kind === 'pdf' && !f.reorderable){
+        warn.push('O arquivo "' + f.file.name + '" tem mais de uma nota na mesma página, então não dá para trocar a ordem das páginas. Ele vai sair na ordem original, no fim do arquivo. Se possível, use o HTML da Olist ou o PDF com uma nota por página.');
+      }
+    });
+  }
+  document.getElementById('printWarnings').innerHTML = warn.map(w => '<div class="warning">⚠ ' + escapeHtml(w) + '</div>').join('');
+  document.getElementById('printBtn').disabled = available === 0;
+}
+
+// Ordem final das notas para imprimir (índices em state.notes)
+function printOrder(){
+  return buildPrintGroups().flatMap(g => g.notes);
+}
+
+async function buildOrderedPdf(order){
+  const out = await PDFLib.PDFDocument.create();
+  const loaded = new Map();
+  const loadSrc = async fileIdx => {
+    if(!loaded.has(fileIdx)){
+      const buf = await printStore.files[fileIdx].file.arrayBuffer();
+      loaded.set(fileIdx, await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true }));
+    }
+    return loaded.get(fileIdx);
+  };
+  let count = 0;
+  for(const idx of order){
+    const src = printStore.sources[idx];
+    if(!src || !src.pages) continue;
+    const f = printStore.files[src.fileIdx];
+    if(f.kind !== 'pdf' || !f.reorderable) continue;
+    const doc = await loadSrc(src.fileIdx);
+    const pages = await out.copyPages(doc, src.pages.map(pg => pg - 1));
+    pages.forEach(pg => out.addPage(pg));
+    count++;
+  }
+  // Arquivos que não dá para reordenar vão inteiros no fim
+  for(let i = 0; i < printStore.files.length; i++){
+    const f = printStore.files[i];
+    if(f.kind !== 'pdf' || f.reorderable) continue;
+    const doc = await loadSrc(i);
+    const pages = await out.copyPages(doc, doc.getPageIndices());
+    pages.forEach(pg => out.addPage(pg));
+    count++;
+  }
+  if(count === 0) return null;
+  const bytes = await out.save();
+  return new Blob([bytes], { type: 'application/pdf' });
+}
+
+function buildOrderedHtml(order){
+  const parts = order
+    .map(idx => printStore.sources[idx])
+    .filter(src => src && src.html)
+    .map(src => src.html);
+  if(parts.length === 0) return null;
+  const html = '<!DOCTYPE html><html><head>' + printStore.htmlHead +
+    '<style>.page-break{page-break-after:always;break-after:page;}</style></head><body>' +
+    parts.join('<div class="page-break"></div>') +
+    '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>' +
+    '</body></html>';
+  return new Blob([html], { type: 'text/html' });
+}
+
+async function generatePrintFiles(){
+  const btn = document.getElementById('printBtn');
+  const output = document.getElementById('printOutput');
+  btn.disabled = true;
+  btn.textContent = 'Gerando...';
+  output.innerHTML = '';
+  try{
+    const order = printOrder();
+    const links = [];
+    const stamp = new Date().toISOString().slice(0,16).replace(/[-:T]/g,'');
+    if(printStore.files.some(f => f.kind === 'pdf')){
+      if(typeof PDFLib === 'undefined') throw new Error('pdf-lib');
+      const pdf = await buildOrderedPdf(order);
+      if(pdf){
+        const url = URL.createObjectURL(pdf);
+        links.push('<a class="btn block" href="' + url + '" target="_blank" rel="noopener">Abrir PDF em ordem para imprimir</a>' +
+          '<div class="muted" style="text-align:center;margin-top:6px;"><a href="' + url + '" download="notas-em-ordem-' + stamp + '.pdf">ou baixar o arquivo</a></div>');
+      }
+    }
+    const html = buildOrderedHtml(order);
+    if(html){
+      const url = URL.createObjectURL(html);
+      links.push('<a class="btn block" href="' + url + '" target="_blank" rel="noopener">Abrir notas (HTML) em ordem para imprimir</a>' +
+        '<div class="muted" style="text-align:center;margin-top:6px;">A janela de impressão abre sozinha. Se não abrir, use Compartilhar → Imprimir.</div>');
+    }
+    output.innerHTML = links.length ? links.join('') : '<div class="warning">⚠ Nenhuma nota disponível para imprimir. Envie as notas de novo.</div>';
+  }catch(err){
+    output.innerHTML = '<div class="warning">⚠ Não foi possível gerar o arquivo de impressão' +
+      (err && err.message === 'pdf-lib' ? ' (a ferramenta de PDF não carregou — confira a internet e recarregue a página).' : '.') + '</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Gerar arquivo para imprimir';
 }
 
 // ---------- RENDER ABA 1 ----------
@@ -1028,9 +1279,12 @@ function resetSession(){
   document.getElementById('warningsBox').innerHTML = '';
   document.getElementById('pdfInput').value = '';
   document.getElementById('resetBtn').style.display = 'none';
+  printStore = { files: [], sources: [], htmlHead: '' };
+  document.getElementById('printOutput').innerHTML = '';
   renderResults();
   renderNotes();
   renderReport();
+  renderPrintGroups();
   showTab(0);
 }
 
@@ -1040,6 +1294,7 @@ loadState();
 renderResults();
 renderNotes();
 renderReport();
+renderPrintGroups();
 if(state.notes && state.notes.length){
   document.getElementById('resetBtn').style.display = 'block';
   showTab(1);
