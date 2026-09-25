@@ -464,7 +464,7 @@ const PRODUCTS = [
   { id:'whey_chocolate',     label:'Whey Chocolate 900g',                        category:'Whey',              keywords:[['whey'],['chocolate']], exclude:['kit'] },
   { id:'creatina_300',       label:'Creatina 300g',                              category:'Creatina',          keywords:[['creatina'],['300']], exclude:['kit'] },
   { id:'creatina_500',       label:'Creatina 500g',                              category:'Creatina',          keywords:[['creatina'],['500']], exclude:['kit'] },
-  { id:'creatina_1000',      label:'Creatina 1000g',                             category:'Creatina',          keywords:[['creatina'],['1000','1kg','1 kg']], exclude:['kit'] },
+  { id:'creatina_1000',      label:'Creatina 1kg',                                category:'Creatina',          keywords:[['creatina'],['1000','1kg','1 kg']], exclude:['kit'] },
   { id:'pretreino_maca',     label:'Pré Treino 300g - Maçã Verde',               category:'Pré-Treino',        keywords:[['pre treino'],['maca verde']], exclude:['kit'] },
   { id:'pretreino_frutas',   label:'Pré Treino 300g - Frutas Vermelhas',         category:'Pré-Treino',        keywords:[['pre treino'],['frutas vermelhas']], exclude:['kit'] },
   { id:'vandal_blue',        label:'Vandal King Jump 300g - Blue Razz',          category:'Pré-Treino',        keywords:[['vandal'],['blue razz']], exclude:['kit'] },
@@ -1004,7 +1004,7 @@ function recordError(message, noteId, noteIndex){
 // é preciso enviar as notas de novo para imprimir.
 let printStore = { files: [], sources: [], htmlHead: '' };
 
-// Agrupa as notas que têm exatamente o mesmo conteúdo (ex: todas as de "1× Creatina 1000g").
+// Agrupa as notas que têm exatamente o mesmo conteúdo (ex: todas as de "1× Creatina 1kg").
 // Grupos maiores primeiro; notas com problema ficam por último.
 function buildPrintGroups(){
   const map = new Map();
@@ -1022,7 +1022,7 @@ function buildPrintGroups(){
     const i = p ? CATEGORY_ORDER.indexOf(p.category) : -1;
     return i < 0 ? 99 : i;
   };
-  // Primeiro os pedidos com um só tipo de produto (ex: só Creatina 1000g), depois os mistos.
+  // Primeiro os pedidos com um só tipo de produto (ex: só Creatina 1kg), depois os mistos.
   // Dentro de cada parte, do grupo com mais pedidos para o com menos.
   const isSingle = g => g.lines.length === 1 ? 0 : 1;
   const groups = Array.from(map.values()).sort((a, b) =>
