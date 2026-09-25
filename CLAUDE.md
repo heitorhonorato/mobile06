@@ -62,6 +62,9 @@ O site resolve dois problemas:
   300g) ficam em grupos separados (confirmado pelo usuário). PDF é reordenado por página com pdf-lib (só funciona
   se cada nota começar numa página própria); HTML da Olist é remontado com os
   blocos de cada nota. Os arquivos originais ficam só na memória.
+- **Imprimir lista (etiqueta 10x15):** botão na lista de separação que abre a
+  lista com quadradinhos para marcar, no tamanho 100x150 mm. A letra diminui
+  sozinha para caber numa etiqueta só. Usa as quantidades já editadas na tela.
 - **Sistema de erros:** quando o site não conseguir reconhecer um produto ou a tabela
   estiver num formato inesperado, registra exatamente qual nota teve o problema
   e mostra no relatório.
