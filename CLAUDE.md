@@ -54,12 +54,16 @@ O site resolve dois problemas:
   A escolha é salva no relatório.
 - **Relatório:** mostra todas as notas processadas, a data e hora da leva, produtos
   separados e quaisquer problemas encontrados (produtos fora do catálogo, tabelas
-  não reconhecidas, etc). Trazir erros para a conversa para resolvermos.
+  não reconhecidas, etc). Trazer erros para a conversa para resolvermos.
+- **Imprimir notas em ordem:** agrupa as notas com o mesmo conteúdo (ex: todas
+  as de "1× Creatina 1000g") e gera um arquivo novo com as notas nessa ordem,
+  grupos maiores primeiro. PDF é reordenado por página com pdf-lib (só funciona
+  se cada nota começar numa página própria); HTML da Olist é remontado com os
+  blocos de cada nota. Os arquivos originais ficam só na memória.
 - **Sistema de erros:** quando o site não conseguir reconhecer um produto ou a tabela
   estiver num formato inesperado, registra exatamente qual nota teve o problema
   e mostra no relatório.
 
-## Restrições técnicas
 ## Restrições técnicas (não mudar sem avisar)
 - Continuar em **um único arquivo HTML** — sem servidor, sem serviço pago,
   sem etapa de build. Precisa funcionar hospedado como página estática pura.
